@@ -3,12 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v9</title>
+<title>Dashboard Programação Diária v10</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{
   --bg:#0f172a;--surface:#1e293b;--surface2:#293548;
@@ -163,6 +162,7 @@ canvas{cursor:pointer}
 <header class="app-header">
   <h1>📊 Dashboard Programação Diária</h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
+  <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <button class="theme-btn" id="themeBtn" onclick="toggleTheme(event)">🌙 Escuro</button>
 </header>
 
@@ -321,48 +321,51 @@ canvas{cursor:pointer}
     <!-- SUPABASE -->
     <div class="section-card" style="margin-top:0">
       <div class="sec-head">
-        <span class="sec-title">☁️ Supabase — Sincronização na Nuvem</span>
-        <span id="supaStatus" style="font-size:11px;color:var(--muted)">Não configurado</span>
+        <span class="sec-title">☁️ Banco de Dados na Nuvem (Supabase)</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span id="supaModeBadge" style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;background:var(--surface2);color:var(--muted)">LOCAL</span>
+          <span id="supaStatus" style="font-size:11px;color:var(--muted)"></span>
+        </div>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
         <div class="fg" style="flex:2;min-width:260px">
-          <label>Project URL</label>
+          <label>URL do Projeto</label>
           <input type="text" id="supaUrl" placeholder="https://xxxxxxxx.supabase.co" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:5px;font-size:12px;outline:none">
         </div>
         <div class="fg" style="flex:2;min-width:260px">
-          <label>Anon Key (public)</label>
+          <label>Chave anon (public)</label>
           <input type="password" id="supaKey" placeholder="eyJhbGciOiJIUzI1NiIs..." style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:5px;font-size:12px;outline:none">
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="saveSupaCfg()">💾 Salvar Config</button>
-        <button class="btn btn-ghost btn-sm" onclick="testSupa()">🔌 Testar Conexão</button>
-        <button class="btn btn-success btn-sm" onclick="pushToCloud()">⬆ Enviar para Nuvem</button>
-        <button class="btn btn-ghost btn-sm" onclick="pullFromCloud()">⬇ Baixar da Nuvem</button>
+        <button class="btn btn-primary btn-sm" onclick="supaSaveTest()">💾 Salvar e Testar Conexão</button>
+        <button class="btn btn-ghost btn-sm" id="supaToggleBtn" onclick="supaToggle()">☁ Ativar Nuvem</button>
+        <button class="btn btn-success btn-sm" onclick="supaMigrate()">⇪ Migrar Dados Locais → Nuvem</button>
       </div>
       <details style="margin-top:12px">
-        <summary style="cursor:pointer;font-size:11px;color:var(--primary);font-weight:600">📋 SQL de criação da tabela (executar UMA vez no SQL Editor do Supabase)</summary>
-        <pre style="margin-top:8px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:10px;overflow-x:auto;color:var(--text)">-- Cole no SQL Editor do Supabase e clique em RUN
-create table if not exists dashboard_kv (
-  key text primary key,
-  value jsonb not null,
-  updated_at timestamptz default now()
+        <summary style="cursor:pointer;font-size:11px;color:var(--primary);font-weight:600">📘 Guia passo a passo + SQL da tabela</summary>
+        <div style="font-size:11px;color:var(--muted);line-height:1.9;margin-top:8px">
+          1. Crie conta/projeto em <strong>supabase.com</strong> (região São Paulo).<br>
+          2. <strong>SQL Editor</strong> → New query → cole o SQL abaixo → <strong>RUN</strong>.<br>
+          3. <strong>Settings → API</strong> → copie <em>Project URL</em> e <em>anon public</em>.<br>
+          4. Cole aqui → <strong>Salvar e Testar Conexão</strong> → <strong>Ativar Nuvem</strong>.<br>
+          5. Use <strong>Migrar</strong> para copiar os dados locais existentes para a nuvem.<br>
+          6. Deploy compartilhado: crie um <code>config.json</code> ao lado do HTML — os valores dele sempre vencem os salvos localmente.
+        </div>
+        <pre style="margin-top:8px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:10px;overflow-x:auto;color:var(--text)">create table if not exists pd_store (
+  store text not null,
+  key   text not null,
+  doc   jsonb not null,
+  updated_at timestamptz default now(),
+  primary key (store, key)
 );
 
-alter table dashboard_kv enable row level security;
+alter table pd_store enable row level security;
 
--- Leitura liberada para todos com a anon key
-create policy "leitura_publica" on dashboard_kv
-  for select using (true);
-
--- Escrita liberada (restrinja depois se quiser, ver docs de RLS)
-create policy "insert_publico" on dashboard_kv
-  for insert with check (true);
-
-create policy "update_publico" on dashboard_kv
-  for update using (true);</pre>
+create policy "pd_store_all" on pd_store
+  for all using (true) with check (true);</pre>
       </details>
-      <p style="font-size:10px;color:var(--muted);margin-top:8px">Ao abrir a página: se a nuvem estiver configurada e o banco local estiver vazio, os dados são baixados automaticamente. A sincronização manual usa os botões acima (última escrita vence).</p>
+      <p style="font-size:10px;color:var(--muted);margin-top:8px">Modo híbrido: com a nuvem ativa, leituras e gravações vão ao Supabase; desativada, tudo funciona no armazenamento local (IndexedDB). O app nunca depende da nuvem.</p>
     </div>
 
     <!-- IMPORTAÇÃO -->
@@ -610,7 +613,20 @@ async function processFiles(files){
     const msg=`✓ ${rawData.length} registros (${added} novos${updated>0?', '+updated+' atualizados':''}).`;
     setImpSt('ready',msg);
     setMainSt('ready',`${rawData.length} registros. Use os filtros para navegar.`);
-    setBadge();await persistData();
+    setBadge();
+    if(Supa.active){
+      try{
+        // Dedup de importação: baixa SÓ as chaves p/ contagem multi-máquina
+        const cloudKeys=await Supa.getKeys('registros');
+        let cAdd=0,cUpd=0;
+        newRows.forEach(d=>{cloudKeys.has(regKey(d))?cUpd++:cAdd++;});
+        await Supa.upsert('registros',newRows,regKey); // servidor faz a dedup
+        if(stopCodes.length)await Supa.upsert('stopcodes',stopCodes,s=>s.code);
+        supaStatus('ok',`✓ Nuvem: ${cAdd} novos, ${cUpd} atualizados`);
+      }catch(e){supaStatus('err','Nuvem: '+e.message);toast('Falha ao enviar à nuvem: '+e.message,'err');}
+    }else{
+      await persistData();
+    }
     toast(msg,'ok');
   } else {
     setImpSt('','Nenhum dado válido. Verifique se as abas têm nome 1T, 2T ou 3T.');
@@ -718,6 +734,7 @@ function updateMeta(v){
   localStorage.setItem('pd_meta',String(metaAdh));
   const mi=document.getElementById('metaInput');if(mi)mi.value=metaAdh;
   renderAdhCharts();
+  syncMetasCloud();
   toast(`Meta: ${metaAdh}%`,'ok');
 }
 function updateMetaDT(v){
@@ -725,6 +742,7 @@ function updateMetaDT(v){
   localStorage.setItem('pd_meta_dt',String(metaDowntime));
   const mi=document.getElementById('metaDTInput');if(mi)mi.value=metaDowntime;
   renderAdhCharts();
+  syncMetasCloud();
   toast(`Meta DownTime: ${fn(metaDowntime)} min/dia`,'ok');
 }
 /** Dias no mês (m = 1-indexed) */
@@ -1192,8 +1210,23 @@ function renderSummTable(){
 }
 
 /* ═══════════════ DE/PARA ════════════════════════════════════ */
-function loadDp(){try{const s=localStorage.getItem('pd_dp2');if(s){depara=JSON.parse(s);renderDp();}}catch(e){}}
-function saveDp(){try{localStorage.setItem('pd_dp2',JSON.stringify(depara));}catch(e){}}
+function loadDp(){
+  if(Supa.active)return; // no modo nuvem, depara vem de loadPersisted
+  try{const s=localStorage.getItem('pd_dp2');if(s){depara=JSON.parse(s);renderDp();}}catch(e){}
+}
+let _dpSyncT=null;
+function saveDp(){
+  try{localStorage.setItem('pd_dp2',JSON.stringify(depara));}catch(e){}
+  if(Supa.active){
+    clearTimeout(_dpSyncT);
+    _dpSyncT=setTimeout(async()=>{
+      try{
+        await Supa.clear('depara'); // replace-all: edição inline muda o hash da chave
+        if(depara.length)await Supa.upsert('depara',depara,dpKey);
+      }catch(e){supaStatus('err','De/Para nuvem: '+e.message);}
+    },800);
+  }
+}
 function renderDp(){
   const tb=document.getElementById('dpBody');tb.innerHTML='';
   depara.forEach((r,i)=>{
@@ -1233,15 +1266,23 @@ function exportDpCSV(){
   depara.forEach(r=>{c+=`${r.codAcabado||''},${r.codWip||''},${r.molde||''},"${(r.descricao||'').replace(/"/g,'""')}"\n`;});
   dlFile('depara.csv',c,'text/csv');
 }
-function clearAllData(){
-  if(!confirm('Apagar TODOS os dados importados? Esta ação não pode ser desfeita.'))return;
+async function clearAllData(){
+  if(!confirm('Apagar TODOS os dados importados?\nEsta ação não pode ser desfeita.'))return;
+  if(Supa.active){
+    try{
+      const n1=await Supa.clear('registros');
+      const n2=await Supa.clear('stopcodes');
+      toast(`Nuvem: ${n1} registros e ${n2} códigos removidos.`,'ok');
+      supaStatus('ok',`✓ Limpeza: ${n1+n2} linhas removidas`);
+    }catch(e){toast('Erro ao limpar nuvem: '+e.message,'err');return;}
+  }
   rawData=[];filteredData=[];stopCodes=[];
   setBadge();setMainSt('','Dados apagados. Importe novos arquivos .xlsx.');
   renderKPIs();renderAdhCharts();renderPareto();renderSummTable();
   document.getElementById('commPanel').classList.remove('vis');
   dbDel('pd_raw');dbDel('pd_sc');
   localStorage.removeItem('pd_raw');localStorage.removeItem('pd_sc');
-  toast('Dados apagados.','ok');
+  if(!Supa.active)toast('Dados apagados.','ok');
 }
 
 /* ═══════════════ BACKUP / RESTORE ═══════════════════════════ */
@@ -1335,19 +1376,48 @@ async function dbGet(key){try{const r=await _db.kv.get(key);return r?r.value:nul
 async function dbDel(key){try{await _db.kv.delete(key);}catch(e){}}
 
 async function persistData(){
+  if(Supa.active){
+    try{
+      await Supa.upsert('registros',rawData,regKey);
+      if(stopCodes.length)await Supa.upsert('stopcodes',stopCodes,s=>s.code);
+      supaStatus('ok',`✓ ${rawData.length} registros gravados na nuvem`);
+    }catch(e){supaStatus('err','Gravação nuvem: '+e.message);toast('Nuvem: '+e.message,'err');}
+    return;
+  }
   await dbSave('pd_raw',rawData);
   try{localStorage.setItem('pd_sc',JSON.stringify(stopCodes));}catch(e){}
 }
 
 async function loadPersisted(){
+  // ── FONTE: NUVEM ────────────────────────────────────────────────
+  if(Supa.active&&Supa.cfgOk()){
+    try{
+      setMainSt('loading','☁ Carregando dados da nuvem...');
+      const{regs,scs,dps,cfg}=await Supa.loadAll();
+      rawData=regs;stopCodes=scs;depara=dps;renderDp();
+      if(cfg){
+        if(cfg.metaAdh!=null){metaAdh=cfg.metaAdh;const mi=document.getElementById('metaInput');if(mi)mi.value=metaAdh;}
+        if(cfg.metaDowntime!=null){metaDowntime=cfg.metaDowntime;const md=document.getElementById('metaDTInput');if(md)md.value=metaDowntime;}
+      }
+      populateFilterOpts();applyFilters();setBadge();
+      setMainSt('ready',`☁ ${rawData.length} registros carregados da nuvem.`);
+      setImpSt('ready',`☁ ${rawData.length} registros (nuvem).`);
+      supaStatus('ok',`✓ ${rawData.length} registros carregados às ${new Date().toLocaleTimeString('pt-BR')}`);
+      return;
+    }catch(e){
+      supaStatus('err','Falha na nuvem: '+e.message);
+      setMainSt('warn','Nuvem indisponível — usando dados locais.');
+      // continua para o fluxo local abaixo (fallback)
+    }
+  }
+  // ── FONTE: LOCAL (IndexedDB) ────────────────────────────────────
   try{
     let raw=await dbGet('pd_raw');
     if(!raw){
       const ls=localStorage.getItem('pd_raw');
       if(ls){
-        try{raw=JSON.parse(ls);await dbSave('pd_raw',raw);localStorage.removeItem('pd_raw');
-          toast('✓ Migração para IndexedDB concluída.','ok');
-        }catch(e){localStorage.removeItem('pd_raw');raw=null;}
+        try{raw=JSON.parse(ls);await dbSave('pd_raw',raw);localStorage.removeItem('pd_raw');toast('✓ Migração para IndexedDB concluída.','ok');}
+        catch(e){localStorage.removeItem('pd_raw');raw=null;}
       }
     }
     const sc=localStorage.getItem('pd_sc');
@@ -1364,139 +1434,205 @@ async function loadPersisted(){
   }
 }
 
-/* ═══════════════ SUPABASE (nuvem) ════════════════════════════
-   Complementa o IndexedDB local. Tabela única: dashboard_kv
-   Chaves: pd_raw, pd_sc, pd_dp, pd_metas
-   ═══════════════════════════════════════════════════════════════ */
-let supa=null, supaCfg={url:'',key:''};
+/* ═══════════════ SUPABASE — REST PostgREST puro ═══════════════
+   Sem SDK. Tabela: pd_store (store, key, doc jsonb, PK(store,key)).
+   Modo híbrido: Supa.active → nuvem; senão → IndexedDB/localStorage.
+   Stores: registros | stopcodes | depara | config
+   ════════════════════════════════════════════════════════════════ */
+function djb2(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return(h>>>0).toString(36);}
+const regKey=d=>`${d.data}|${d.turno}|${d.codigo}`;       // mesma chave da dedup local
+const dpKey =r=>djb2(`${r.codAcabado||''}|${r.codWip||''}|${r.molde||''}|${r.descricao||''}`);
 
-function loadSupaCfg(){
-  try{const s=localStorage.getItem('pd_supa');if(s)supaCfg=JSON.parse(s);}catch(e){}
-}
-function saveSupaCfg(){
-  supaCfg.url=document.getElementById('supaUrl').value.trim();
-  supaCfg.key=document.getElementById('supaKey').value.trim();
-  localStorage.setItem('pd_supa',JSON.stringify(supaCfg));
-  if(initSupa())toast('✓ Configuração Supabase salva.','ok');
-}
-function initSupa(){
-  if(!supaCfg.url||!supaCfg.key){supa=null;setSupaStatus('','Não configurado');return false;}
-  try{
-    supa=window.supabase.createClient(supaCfg.url,supaCfg.key);
-    setSupaStatus('','Configurado (teste a conexão)');
+const Supa={
+  url:'',key:'',active:false,fromConfigJson:false,
+
+  // Sanitiza URL colada: remove barras finais e /rest/v1 (evita 404 PGRST125)
+  sanitize(u){return(u||'').trim().replace(/\/+$/,'').replace(/\/rest\/v1$/,'').replace(/\/+$/,'');},
+  hdr(extra){return Object.assign({'apikey':this.key,'Authorization':'Bearer '+this.key,'Content-Type':'application/json'},extra||{});},
+  ep(q){return this.url+'/rest/v1/pd_store'+(q||'');},
+  cfgOk(){return !!(this.url&&this.key);},
+
+  async test(){
+    const r=await fetch(this.ep('?select=key&limit=1'),{headers:this.hdr()});
+    if(!r.ok)throw new Error('HTTP '+r.status+' — '+(await r.text()).slice(0,160));
     return true;
-  }catch(e){supa=null;setSupaStatus('err','Erro: '+e.message);return false;}
-}
-async function testSupa(){
-  if(!initSupa()){toast('Preencha URL e chave primeiro.','err');return;}
-  setSupaStatus('','Testando...');
-  const{error}=await supa.from('dashboard_kv').select('key').limit(1);
-  if(error){setSupaStatus('err','Falha: '+error.message);toast('Falha na conexão: '+error.message,'err');}
-  else{setSupaStatus('ok','✓ Conexão OK');toast('✓ Conexão com Supabase OK.','ok');}
-}
-const CHUNK_SIZE=400; // registros por bloco (evita statement timeout)
+  },
 
-async function pushToCloud(){
-  if(!supa&&!initSupa()){toast('Configure o Supabase primeiro.','err');return;}
-  if(!rawData.length){toast('Sem dados locais para enviar.','err');return;}
-  const now=new Date().toISOString();
-  try{
-    // 1) Fatia rawData em blocos de CHUNK_SIZE registros
-    const chunks=[];
-    for(let i=0;i<rawData.length;i+=CHUNK_SIZE)chunks.push(rawData.slice(i,i+CHUNK_SIZE));
-    const total=chunks.length;
+  // Upsert: dedup por chave via Map (evita "cannot affect row a second time"),
+  // chunks de 500, 4 simultâneos, Prefer: resolution=merge-duplicates
+  async upsert(store,items,keyFn){
+    if(!items||!items.length)return 0;
+    const map=new Map();
+    items.forEach(it=>{const k=keyFn(it);map.set(k,{store,key:k,doc:it});});
+    const rows=[...map.values()];
+    const chunks=[];for(let i=0;i<rows.length;i+=500)chunks.push(rows.slice(i,i+500));
+    for(let i=0;i<chunks.length;i+=4){
+      await Promise.all(chunks.slice(i,i+4).map(c=>
+        fetch(this.ep(),{method:'POST',headers:this.hdr({'Prefer':'resolution=merge-duplicates'}),body:JSON.stringify(c)})
+          .then(async r=>{if(!r.ok)throw new Error('Upsert '+store+': HTTP '+r.status+' — '+(await r.text()).slice(0,160));})
+      ));
+    }
+    return rows.length;
+  },
 
-    // 2) Envia metadados + configs (payload pequeno, uma chamada)
-    setSupaStatus('','Enviando configurações...');
-    let r=await supa.from('dashboard_kv').upsert([
-      {key:'pd_raw_meta',value:{chunks:total,records:rawData.length,ts:now},updated_at:now},
-      {key:'pd_sc',   value:stopCodes,updated_at:now},
-      {key:'pd_dp',   value:depara,   updated_at:now},
-      {key:'pd_metas',value:{metaAdh,metaDowntime},updated_at:now}
+  // Leitura paginada 1000/página: 1ª com count=exact, demais em paralelo (conc. 6)
+  async getAll(store){
+    const page=1000;
+    const first=await fetch(this.ep(`?store=eq.${store}&select=doc&order=key.asc&limit=${page}&offset=0`),
+      {headers:this.hdr({'Prefer':'count=exact'})});
+    if(!first.ok)throw new Error('Leitura '+store+': HTTP '+first.status);
+    const total=parseInt((first.headers.get('content-range')||'0/0').split('/')[1])||0;
+    const docs=(await first.json()).map(r=>r.doc);
+    const offs=[];for(let o=page;o<total;o+=page)offs.push(o);
+    for(let i=0;i<offs.length;i+=6){
+      const batch=await Promise.all(offs.slice(i,i+6).map(o=>
+        fetch(this.ep(`?store=eq.${store}&select=doc&order=key.asc&limit=${page}&offset=${o}`),{headers:this.hdr()})
+          .then(r=>{if(!r.ok)throw new Error('Página '+store+': HTTP '+r.status);return r.json();})
+      ));
+      batch.forEach(js=>docs.push(...js.map(r=>r.doc)));
+    }
+    return docs;
+  },
+
+  // Dedup de importação: baixa SÓ as chaves (select=key), paginado
+  async getKeys(store){
+    const page=1000;
+    const first=await fetch(this.ep(`?store=eq.${store}&select=key&order=key.asc&limit=${page}&offset=0`),
+      {headers:this.hdr({'Prefer':'count=exact'})});
+    if(!first.ok)throw new Error('Chaves '+store+': HTTP '+first.status);
+    const total=parseInt((first.headers.get('content-range')||'0/0').split('/')[1])||0;
+    const keys=(await first.json()).map(r=>r.key);
+    const offs=[];for(let o=page;o<total;o+=page)offs.push(o);
+    for(let i=0;i<offs.length;i+=6){
+      const batch=await Promise.all(offs.slice(i,i+6).map(o=>
+        fetch(this.ep(`?store=eq.${store}&select=key&order=key.asc&limit=${page}&offset=${o}`),{headers:this.hdr()}).then(r=>r.json())
+      ));
+      batch.forEach(js=>keys.push(...js.map(r=>r.key)));
+    }
+    return new Set(keys);
+  },
+
+  // Exclusão filtrada: contagem pelo header do próprio DELETE
+  async clear(store){
+    const r=await fetch(this.ep(`?store=eq.${store}`),{method:'DELETE',headers:this.hdr({'Prefer':'count=exact'})});
+    if(!r.ok)throw new Error('Delete '+store+': HTTP '+r.status);
+    return parseInt((r.headers.get('content-range')||'*/0').split('/')[1])||0;
+  },
+  async deleteWhere(store,field,value){
+    const r=await fetch(this.ep(`?store=eq.${store}&doc->>${field}=eq.${encodeURIComponent(value)}`),
+      {method:'DELETE',headers:this.hdr({'Prefer':'count=exact'})});
+    if(!r.ok)throw new Error('Delete filtrado: HTTP '+r.status);
+    return parseInt((r.headers.get('content-range')||'*/0').split('/')[1])||0;
+  },
+
+  // loadAll: todos os stores em paralelo
+  async loadAll(){
+    const[regs,scs,dps,cfgs]=await Promise.all([
+      this.getAll('registros'),this.getAll('stopcodes'),this.getAll('depara'),this.getAll('config')
     ]);
-    if(r.error)throw r.error;
-
-    // 3) Envia cada bloco separadamente (payload pequeno por chamada)
-    for(let i=0;i<total;i++){
-      setSupaStatus('',`Enviando bloco ${i+1}/${total}...`);
-      r=await supa.from('dashboard_kv').upsert(
-        {key:'pd_raw_chunk_'+i,value:chunks[i],updated_at:now}
-      );
-      if(r.error)throw r.error;
-    }
-
-    // 4) Remove blocos antigos que sobraram de envios anteriores maiores
-    const{data:oldKeys}=await supa.from('dashboard_kv').select('key').like('key','pd_raw_chunk_%');
-    if(oldKeys){
-      const stale=oldKeys.map(k=>k.key).filter(k=>+k.replace('pd_raw_chunk_','')>=total);
-      if(stale.length)await supa.from('dashboard_kv').delete().in('key',stale);
-    }
-    // Remove chave legada de envios antigos (formato monolítico)
-    await supa.from('dashboard_kv').delete().eq('key','pd_raw');
-
-    setSupaStatus('ok',`✓ ${rawData.length} registros (${total} blocos) enviados às ${new Date().toLocaleTimeString('pt-BR')}`);
-    toast(`✓ ${rawData.length} registros enviados para a nuvem.`,'ok');
-  }catch(e){
-    setSupaStatus('err','Erro ao enviar: '+e.message);
-    toast('Erro: '+e.message,'err');
+    return{regs,scs,dps,cfg:cfgs.length?cfgs[0]:null};
   }
+};
+
+/* ── Configuração / UI ──────────────────────────────────────────── */
+function supaLoadLocalCfg(){
+  try{const s=JSON.parse(localStorage.getItem('pd_supa')||'{}');Supa.url=Supa.sanitize(s.url||'');Supa.key=s.key||'';}catch(e){}
+  Supa.active=localStorage.getItem('pd_supa_active')==='1';
 }
-async function pullFromCloud(silent=false){
-  if(!supa&&!initSupa()){if(!silent)toast('Configure o Supabase primeiro.','err');return false;}
+function supaPersistLocalCfg(){localStorage.setItem('pd_supa',JSON.stringify({url:Supa.url,key:Supa.key}));}
+function supaSetActive(v){Supa.active=v;localStorage.setItem('pd_supa_active',v?'1':'0');updateCloudUI();}
+
+async function supaSaveTest(){
+  Supa.url=Supa.sanitize(document.getElementById('supaUrl').value);
+  Supa.key=document.getElementById('supaKey').value.trim();
+  document.getElementById('supaUrl').value=Supa.url;
+  if(!Supa.cfgOk()){toast('Preencha URL e chave.','err');return;}
+  supaPersistLocalCfg();
+  supaStatus('','Testando conexão...');
+  try{await Supa.test();supaStatus('ok','✓ Conexão OK — tabela pd_store acessível');toast('✓ Conexão OK.','ok');}
+  catch(e){supaStatus('err','Falha: '+e.message);toast('Falha: '+e.message,'err');}
+}
+
+async function supaToggle(){
+  if(Supa.active){
+    supaSetActive(false);
+    supaStatus('','Nuvem desativada.');
+    toast('Nuvem desativada. Recarregando dados locais...','ok');
+    await loadPersisted();loadDp();
+  }else{
+    if(!Supa.cfgOk()){toast('Configure e teste a conexão primeiro.','err');return;}
+    supaStatus('','Validando conexão...');
+    try{await Supa.test();}
+    catch(e){supaStatus('err','Falha: '+e.message);toast('Não ativado: '+e.message,'err');return;}
+    supaSetActive(true);
+    toast('☁ Nuvem ativada. Carregando dados da nuvem...','ok');
+    await loadPersisted();
+  }
+  updateCloudUI();
+}
+
+async function supaMigrate(){
+  if(!Supa.cfgOk()){toast('Configure a conexão primeiro.','err');return;}
+  // Leitura FORÇADA do armazenamento local (ignora Supa.active)
+  let lRaw=[];try{lRaw=(await dbGet('pd_raw'))||[];}catch(e){}
+  let lSc=[]; try{lSc=JSON.parse(localStorage.getItem('pd_sc')||'[]');}catch(e){}
+  let lDp=[]; try{lDp=JSON.parse(localStorage.getItem('pd_dp2')||'[]');}catch(e){}
+  const mA=parseFloat(localStorage.getItem('pd_meta'))||metaAdh;
+  const mD=parseFloat(localStorage.getItem('pd_meta_dt'))||metaDowntime;
+  if(!lRaw.length&&!lDp.length&&!lSc.length){toast('Nenhum dado local para migrar.','err');return;}
+  if(!confirm(`Migrar dados locais para a nuvem:\n\n• ${lRaw.length} registros de produção\n• ${lSc.length} códigos de parada\n• ${lDp.length} entradas De/Para\n• Metas: ${mA}% aderência / ${mD} min DownTime\n\nRegistros com a mesma chave na nuvem serão substituídos. Continuar?`))return;
+  supaStatus('','Migrando dados locais → nuvem...');
   try{
-    if(!silent)setSupaStatus('','Baixando configurações...');
-
-    // 1) Busca configs + metadados dos chunks (linhas pequenas)
-    const{data:cfgData,error:e1}=await supa.from('dashboard_kv')
-      .select('key,value')
-      .in('key',['pd_raw_meta','pd_raw','pd_sc','pd_dp','pd_metas']);
-    if(e1)throw e1;
-    if(!cfgData||!cfgData.length){
-      setSupaStatus('','Nuvem vazia');
-      if(!silent)toast('Nuvem vazia. Use "Enviar" primeiro.','err');
-      return false;
-    }
-    const kv=Object.fromEntries(cfgData.map(r=>[r.key,r.value]));
-
-    // 2) Remonta rawData: formato novo em chunks, ou legado monolítico
-    let newRaw=null;
-    if(kv.pd_raw_meta&&kv.pd_raw_meta.chunks>0){
-      const total=kv.pd_raw_meta.chunks;
-      newRaw=[];
-      for(let i=0;i<total;i++){
-        if(!silent)setSupaStatus('',`Baixando bloco ${i+1}/${total}...`);
-        const{data:ch,error:e2}=await supa.from('dashboard_kv')
-          .select('value').eq('key','pd_raw_chunk_'+i).single();
-        if(e2)throw e2;
-        newRaw.push(...(ch.value||[]));
-      }
-    }else if(kv.pd_raw){
-      newRaw=kv.pd_raw; // compatibilidade com envios antigos
-    }
-
-    // 3) Aplica os dados
-    if(newRaw)rawData=newRaw;
-    if(kv.pd_sc)stopCodes=kv.pd_sc;
-    if(kv.pd_dp){depara=kv.pd_dp;renderDp();saveDp();}
-    if(kv.pd_metas){
-      if(kv.pd_metas.metaAdh!=null){metaAdh=kv.pd_metas.metaAdh;const mi=document.getElementById('metaInput');if(mi)mi.value=metaAdh;localStorage.setItem('pd_meta',String(metaAdh));}
-      if(kv.pd_metas.metaDowntime!=null){metaDowntime=kv.pd_metas.metaDowntime;const md=document.getElementById('metaDTInput');if(md)md.value=metaDowntime;localStorage.setItem('pd_meta_dt',String(metaDowntime));}
-    }
-    populateFilterOpts();applyFilters();setBadge();
-    await persistData();
-    setSupaStatus('ok',`✓ ${rawData.length} registros baixados às ${new Date().toLocaleTimeString('pt-BR')}`);
-    if(!silent)toast(`✓ ${rawData.length} registros baixados da nuvem.`,'ok');
-    setMainSt('ready',`${rawData.length} registros sincronizados da nuvem.`);
-    return true;
-  }catch(e){
-    setSupaStatus('err','Erro: '+e.message);
-    if(!silent)toast('Erro: '+e.message,'err');
-    return false;
-  }
+    await Supa.test();
+    if(lRaw.length)await Supa.upsert('registros',lRaw,regKey);
+    if(lSc.length)await Supa.upsert('stopcodes',lSc,s=>s.code);
+    if(lDp.length){await Supa.clear('depara');await Supa.upsert('depara',lDp,dpKey);}
+    await Supa.upsert('config',[{metaAdh:mA,metaDowntime:mD}],()=>'metas');
+    supaStatus('ok',`✓ Migração concluída: ${lRaw.length} registros enviados`);
+    toast(`✓ ${lRaw.length} registros migrados para a nuvem.`,'ok');
+  }catch(e){supaStatus('err','Erro na migração: '+e.message);toast('Erro: '+e.message,'err');}
 }
-function setSupaStatus(cls,msg){
+
+function syncMetasCloud(){
+  if(!Supa.active)return;
+  Supa.upsert('config',[{metaAdh,metaDowntime}],()=>'metas')
+    .catch(e=>supaStatus('err','Metas nuvem: '+e.message));
+}
+
+function supaStatus(cls,msg){
   const el=document.getElementById('supaStatus');
   if(el){el.textContent=msg;el.style.color=cls==='ok'?'var(--success)':cls==='err'?'var(--danger)':'var(--muted)';}
+}
+function updateCloudUI(){
+  const b=document.getElementById('supaModeBadge');
+  if(b){b.textContent=Supa.active?'☁ NUVEM':'LOCAL';
+    b.style.background=Supa.active?'rgba(59,130,246,.15)':'var(--surface2)';
+    b.style.color=Supa.active?'var(--primary)':'var(--muted)';}
+  const t=document.getElementById('supaToggleBtn');
+  if(t)t.textContent=Supa.active?'⏻ Desativar Nuvem':'☁ Ativar Nuvem';
+  const h=document.getElementById('cloudBadge');
+  if(h)h.style.display=Supa.active?'inline-block':'none';
+}
+
+/* ── config.json (deploy compartilhado) ─────────────────────────
+   Valores do arquivo SEMPRE vencem o localStorage.
+   Primeira visita: auto-ativa. Usuário desativou: respeita
+   (exceto forceEnabled:true). file:// ou ausente: fluxo local.  ── */
+async function loadConfigJson(){
+  try{
+    const r=await fetch('./config.json',{cache:'no-store'});
+    if(!r.ok)return;
+    const c=await r.json();
+    if(c&&c.url&&c.key){
+      Supa.url=Supa.sanitize(c.url);
+      Supa.key=c.key;
+      Supa.fromConfigJson=true;
+      const stored=localStorage.getItem('pd_supa_active');
+      if(c.forceEnabled===true)Supa.active=true;
+      else if(stored===null)Supa.active=true;   // primeira visita
+      else Supa.active=(stored==='1');          // respeita escolha do usuário
+    }
+  }catch(e){/* silencioso: file:// ou sem o arquivo */}
 }
 
 /* ═══════════════ ABA CONFIGURAÇÕES (oculta) ═════════════════ */
@@ -1552,17 +1688,17 @@ function toast(msg,type=''){const el=document.getElementById('toast');el.textCon
   if(sm){metaAdh=parseFloat(sm)||95;const mi=document.getElementById('metaInput');if(mi)mi.value=metaAdh;}
   const sdm=localStorage.getItem('pd_meta_dt');
   if(sdm){metaDowntime=parseFloat(sdm)||1000;const mdmi=document.getElementById('metaDTInput');if(mdmi)mdmi.value=metaDowntime;}
-  await loadPersisted();
-  loadDp();
-  // Supabase: restaura config e, se banco local vazio, baixa da nuvem
-  loadSupaCfg();
+  // 1) Config Supabase: localStorage primeiro; config.json SEMPRE vence.
+  //    CUIDADO: não reler o localStorage depois desta linha.
+  supaLoadLocalCfg();
+  await loadConfigJson();
   const su=document.getElementById('supaUrl'),sk=document.getElementById('supaKey');
-  if(su)su.value=supaCfg.url||'';
-  if(sk)sk.value=supaCfg.key||'';
-  if(supaCfg.url&&supaCfg.key){
-    initSupa();
-    if(!rawData.length)await pullFromCloud(true);
-  }
+  if(su)su.value=Supa.url||'';
+  if(sk)sk.value=Supa.key||'';
+  updateCloudUI();
+  // 2) Carrega dados da fonte ativa (nuvem ou local)
+  await loadPersisted();
+  loadDp(); // no-op se nuvem ativa
 })();
 </script>
 </body>
