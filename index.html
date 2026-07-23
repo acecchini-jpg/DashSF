@@ -763,10 +763,39 @@ function adhColorDT(v,meta){
   return'rgba(239,68,68,.82)';
 }
 
+/** Cor de destaque para a barra do mês/dia atualmente selecionado no filtro
+ *  (sobrepõe a cor de performance, para ficar visualmente inequívoca) */
+const SELECT_BG='rgba(37,99,235,.95)';
+const SELECT_BORDER='#1d4ed8';
+
+/** Base p/ os gráficos de Aderência (Mês a Mês / Diário):
+ *  respeita Turno + Busca + opcionalmente Ano/Mês (parâmetros),
+ *  mas IGNORA Semana, Dia e Período De/Até — assim, selecionar um dia
+ *  ou semana específicos não recorta a visão anual/mensal desses gráficos. */
+function buildAdhBase({useAno=false,useMes=false}={}){
+  const ano=document.getElementById('fAno').value;
+  const mes=document.getElementById('fMes').value;
+  const busca=document.getElementById('fBusca').value.toLowerCase().trim();
+  const buscaStops=busca?stopCodes.filter(sc=>sc.code.toLowerCase()===busca||sc.desc.toLowerCase().includes(busca)):[];
+  return rawData.filter(d=>{
+    if(useAno&&ano&&!d.data.startsWith(ano))return false;
+    if(useMes&&mes&&+d.data.slice(5,7)!==+mes)return false;
+    if(!activeTurnos.has(d.turno))return false;
+    if(busca){
+      const h=`${d.codigo} ${d.descricao} ${d.maquina} ${getMolde(d)}`.toLowerCase();
+      const textOk=h.includes(busca);
+      const stopOk=buscaStops.length>0&&buscaStops.some(sc=>(d.paradas[sc.code]||0)>0);
+      if(!textOk&&!stopOk)return false;
+    }
+    return true;
+  });
+}
+
 function renderMonthly(){
   const tipo=document.getElementById('fTipo').value;
   const avaliar=document.getElementById('fAvaliar').value;
-  const base=typeFilter(filteredData,tipo);
+  // Só responde ao filtro de Ano (ignora Mês/Semana/Dia/Período)
+  const base=typeFilter(buildAdhBase({useAno:true}),tipo);
 
   // Deriva os meses com dados
   const monthSet=new Set(base.map(d=>d.data.slice(0,7)));
@@ -781,6 +810,17 @@ function renderMonthly(){
   const labels=months.map(m=>{const[y,mo]=m.split('-');return`${MES_NOMES[+mo-1]}/${y.slice(2)}`;});
   const{text,grid}=gCol();
   if(chartMM)chartMM.destroy();
+
+  // ── Destaque do mês selecionado no filtro ──────────────────────────
+  const selAno=document.getElementById('fAno').value;
+  const selMes=document.getElementById('fMes').value;
+  const isSelMonth=mk=>{
+    if(!selMes)return false;
+    const[y,mo]=mk.split('-');
+    if(+mo!==+selMes)return false;
+    if(selAno&&y!==selAno)return false;
+    return true;
+  };
 
   // ── onClick compartilhado ──────────────────────────────────────────
   const onClickMonth=(evt,els)=>{
@@ -806,13 +846,15 @@ function renderMonthly(){
     });
     const dtVals=months.map(m=>dtmap[m]||0);
     const metaVals=months.map(m=>{const[y,mo]=m.split('-');return metaDowntime*daysInMonth(+y,+mo);});
-    const dtColors=dtVals.map((v,i)=>adhColorDT(v,metaVals[i]));
+    const dtColors=months.map((m,i)=>isSelMonth(m)?SELECT_BG:adhColorDT(dtVals[i],metaVals[i]));
+    const dtBorders=months.map((m,i)=>isSelMonth(m)?SELECT_BORDER:adhColorDT(dtVals[i],metaVals[i]).replace('.82','1').replace('.35','.6'));
     chartMM=new Chart(canvas,{
       data:{labels,datasets:[
         {type:'bar',label:'DownTime (min)',data:dtVals,order:1,
           backgroundColor:dtColors,
-          borderColor:dtColors.map(c=>c.replace('.82','1').replace('.35','.6')),
-          borderWidth:1,borderRadius:4,
+          borderColor:dtBorders,
+          borderWidth:months.map((m,i)=>isSelMonth(m)?2.5:1),
+          borderRadius:4,
           datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
             formatter:v=>fn(v)+' min'}},
         {type:'line',label:'Meta DT',order:0,
@@ -841,12 +883,15 @@ function renderMonthly(){
     const mmap={};
     base.forEach(d=>{const mk=d.data.slice(0,7);if(!mmap[mk])mmap[mk]={p:0,r:0};mmap[mk].p+=d.plano;mmap[mk].r+=d.realizado;});
     const vals=months.map(m=>{const{p,r}=mmap[m]||{p:0,r:0};return p>0?+((r/p)*100).toFixed(1):null;});
+    const barColors=months.map((m,i)=>isSelMonth(m)?SELECT_BG:adhColor(vals[i]));
+    const barBorders=months.map((m,i)=>isSelMonth(m)?SELECT_BORDER:adhColor(vals[i]).replace('.82','1').replace('.35','.6'));
     chartMM=new Chart(canvas,{
       data:{labels,datasets:[
         {type:'bar',label:'Aderência (%)',data:vals,order:1,
-          backgroundColor:vals.map(adhColor),
-          borderColor:vals.map(v=>adhColor(v).replace('.82','1').replace('.35','.6')),
-          borderWidth:1,borderRadius:4,
+          backgroundColor:barColors,
+          borderColor:barBorders,
+          borderWidth:months.map((m,i)=>isSelMonth(m)?2.5:1),
+          borderRadius:4,
           datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
             formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':'—'}},
         {type:'line',label:`Meta ${metaAdh}%`,order:0,
@@ -874,7 +919,9 @@ function renderMonthly(){
 function renderDaily(){
   const tipo=document.getElementById('fTipo').value;
   const avaliar=document.getElementById('fAvaliar').value;
-  const base=typeFilter(filteredData,tipo);
+  // Só responde a Ano+Mês (ignora Semana/Dia/Período) — usado para
+  // achar o mês de referência e para os dados do gráfico
+  const base=typeFilter(buildAdhBase({useAno:true,useMes:true}),tipo);
   const fMes=document.getElementById('fMes').value;
   const fAno=document.getElementById('fAno').value;
   const now=new Date();
@@ -905,6 +952,10 @@ function renderDaily(){
   const{text,grid}=gCol();
   if(chartDD)chartDD.destroy();
 
+  // ── Destaque do dia selecionado no filtro ──────────────────────────
+  const selDia=document.getElementById('fDia').value; // formato ISO yyyy-mm-dd
+  const isSelDay=day=>selDia===`${y2}-${m2}-${day}`;
+
   // ── onClick compartilhado ──────────────────────────────────────────
   const onClickDay=(evt,els)=>{
     if(!els.length||els[0].datasetIndex!==0)return;
@@ -926,13 +977,15 @@ function renderDaily(){
         Object.values(d.paradas).forEach(v=>{dtmap[day]+=v;});
     });
     const dtVals=days.map(d=>dtmap[d]||0);
-    const dtColors=dtVals.map(v=>adhColorDT(v,metaDowntime));
+    const dtColors=days.map((d,i)=>isSelDay(d)?SELECT_BG:adhColorDT(dtVals[i],metaDowntime));
+    const dtBorders=days.map((d,i)=>isSelDay(d)?SELECT_BORDER:adhColorDT(dtVals[i],metaDowntime).replace('.82','1').replace('.35','.6'));
     chartDD=new Chart(canvas,{
       data:{labels:dlabels,datasets:[
         {type:'bar',label:'DownTime (min)',data:dtVals,order:1,
           backgroundColor:dtColors,
-          borderColor:dtColors.map(c=>c.replace('.82','1').replace('.35','.6')),
-          borderWidth:1,borderRadius:4,
+          borderColor:dtBorders,
+          borderWidth:days.map(d=>isSelDay(d)?2.5:1),
+          borderRadius:4,
           datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
             formatter:v=>fn(v)+' min'}},
         {type:'line',label:`Meta ${fn(metaDowntime)} min/dia`,order:0,
@@ -959,12 +1012,15 @@ function renderDaily(){
     const dmap={};
     dayData.forEach(d=>{const day=d.data.slice(8,10);if(!dmap[day])dmap[day]={p:0,r:0};dmap[day].p+=d.plano;dmap[day].r+=d.realizado;});
     const vals=days.map(day=>{const{p,r}=dmap[day]||{p:0,r:0};return p>0?+((r/p)*100).toFixed(1):null;});
+    const barColors=days.map((d,i)=>isSelDay(d)?SELECT_BG:adhColor(vals[i]));
+    const barBorders=days.map((d,i)=>isSelDay(d)?SELECT_BORDER:adhColor(vals[i]).replace('.82','1').replace('.35','.6'));
     chartDD=new Chart(canvas,{
       data:{labels:dlabels,datasets:[
         {type:'bar',label:'Aderência (%)',data:vals,order:1,
-          backgroundColor:vals.map(adhColor),
-          borderColor:vals.map(v=>adhColor(v).replace('.82','1').replace('.35','.6')),
-          borderWidth:1,borderRadius:4,
+          backgroundColor:barColors,
+          borderColor:barBorders,
+          borderWidth:days.map(d=>isSelDay(d)?2.5:1),
+          borderRadius:4,
           datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
             formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':'—'}},
         {type:'line',label:`Meta ${metaAdh}%`,order:0,
