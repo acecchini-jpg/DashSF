@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v11</title>
+<title>Dashboard Programação Diária v11.1</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -163,7 +163,7 @@ canvas{cursor:pointer}
 <body>
 
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v11</span></h1>
+  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v11.1</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
@@ -502,6 +502,7 @@ let custoMap     = {};   // codigo -> {descricao, unitCost} (índice rápido, re
 let filteredData = [];
 let activeTurnos = new Set(['1T','2T','3T']);
 let selStop      = null;
+let lastParetoTop= null; // {code,min,total} do motivo com mais minutos no Pareto atual
 let commState    = { stopCode:null, drillKey:null, grp:null };
 let commHidden   = false;
 
@@ -759,6 +760,37 @@ function applyFilters(){
   renderSummTable();
   closeDrill(false); // false = don't reset commState (already done)
   refreshComm();
+}
+
+/** Filtro padrão na abertura: mês/ano atuais; se não houver dados no mês
+ *  corrente, cai para o mês mais recente disponível (evita tela vazia).
+ *  Em seguida, seleciona automaticamente o principal motivo de parada do
+ *  Pareto — igual ao efeito de clicar na primeira barra manualmente. */
+function applyDefaultMonthFilter(){
+  if(!rawData.length)return;
+  const hoje=new Date();
+  let y=String(hoje.getFullYear()),m=String(hoje.getMonth()+1);
+  const temMesAtual=rawData.some(d=>d.data.startsWith(`${y}-${m.padStart(2,'0')}`));
+  if(!temMesAtual){
+    const mks=[...new Set(rawData.map(d=>d.data.slice(0,7)))].sort();
+    if(!mks.length)return;
+    const[ly,lm]=mks[mks.length-1].split('-');
+    y=ly;m=String(+lm);
+  }
+  const fAnoEl=document.getElementById('fAno');
+  if([...fAnoEl.options].some(o=>o.value===y))fAnoEl.value=y;
+  document.getElementById('fMes').value=m;
+  applyFilters();
+
+  // Seleciona automaticamente o motivo de parada com mais minutos
+  if(lastParetoTop){
+    const{code,min,total}=lastParetoTop;
+    selStop=code;
+    commState={stopCode:code,drillKey:null,grp:null};
+    renderPareto();
+    showDrill(code,min,total);
+    refreshComm();
+  }
 }
 
 function clearFilters(){
@@ -1133,11 +1165,12 @@ function renderPareto(){
   const sorted=Object.entries(totals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   const empty=document.getElementById('paretoEmpty'),canvas=document.getElementById('cPareto');
   document.getElementById('paretoCrumb').textContent='';
-  if(!sorted.length){empty.style.display='flex';canvas.style.display='none';if(chartP){chartP.destroy();chartP=null;}return;}
+  if(!sorted.length){empty.style.display='flex';canvas.style.display='none';if(chartP){chartP.destroy();chartP=null;}lastParetoTop=null;return;}
   empty.style.display='none';canvas.style.display='block';
   const codes=sorted.map(([c])=>c),vals=sorted.map(([,v])=>v);
   const total=vals.reduce((s,v)=>s+v,0);
   let cum=0;const cumPct=vals.map(v=>{cum+=v;return+((cum/total)*100).toFixed(1);});
+  lastParetoTop={code:sorted[0][0],min:sorted[0][1],total}; // motivo principal (maior nº de minutos)
   const{text,grid}=gCol();
   if(chartP)chartP.destroy();
   chartP=new Chart(canvas,{
@@ -1514,7 +1547,7 @@ async function clearAllData(){
 /* ═══════════════ BACKUP / RESTORE ═══════════════════════════ */
 function exportJSON(){
   if(!rawData.length){toast('Sem dados para exportar.','err');return;}
-  const payload={version:'11.0',exportedAt:new Date().toISOString(),metaAdh,stopCodes,depara,custos,records:rawData};
+  const payload={version:'11.1',exportedAt:new Date().toISOString(),metaAdh,stopCodes,depara,custos,records:rawData};
   dlFile(`backup_pd_${stamp()}.json`,JSON.stringify(payload,null,2),'application/json');
   toast(`✓ JSON exportado (${rawData.length} registros).`,'ok');
 }
@@ -1940,7 +1973,10 @@ function toast(msg,type=''){const el=document.getElementById('toast');el.textCon
   await loadPersisted();
   loadDp(); // no-op se nuvem ativa
   await loadCustosLocal(); // no-op se nuvem ativa (já veio de loadPersisted)
-  if(rawData.length)renderKPIs(); // garante que o card de Custo reflita a matriz local recém-carregada
+  if(rawData.length){
+    renderKPIs(); // garante que o card de Custo reflita a matriz local recém-carregada
+    applyDefaultMonthFilter(); // mês atual + motivo principal do Pareto pré-selecionados
+  }
 })();
 </script>
 </body>
