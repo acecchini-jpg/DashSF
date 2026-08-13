@@ -1,6 +1,5 @@
 {
-  "_comentario": "Coloque este arquivo na MESMA pasta do HTML no servidor. Os valores daqui SEMPRE vencem os salvos no navegador — para trocar a chave, basta editar este arquivo. forceEnabled:true obriga o modo nuvem mesmo se o usuário tiver desativado manualmente.",
-  "url": "https://ckxnafkkibqamdyncrab.supabase.co",
-  "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNreG5hZmtraWJxYW1keW5jcmFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwMjkxMDgsImV4cCI6MjA5OTYwNTEwOH0.9vQFE0sGn2DDBNQbIEC9GpaPdD0oCtKeTJBuNx2wW5E",
+  "url": "https://pdornupeyzeemmeospph.supabase.co",
+  "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkb3JudXBleXplZW1tZW9zcHBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NDM4ODMsImV4cCI6MjA5OTUxOTg4M30.VLjweTonpCa0PzxmovS5fK5pmM-Y3qmwl7OIRpiIxts",
   "forceEnabled": false
 }
