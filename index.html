@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v11.1</title>
+<title>Dashboard Programação Diária v12</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -163,7 +163,7 @@ canvas{cursor:pointer}
 <body>
 
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v11.1</span></h1>
+  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v12</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
@@ -335,6 +335,7 @@ canvas{cursor:pointer}
           <span id="supaStatus" style="font-size:11px;color:var(--muted)"></span>
         </div>
       </div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">O Dash SF compartilha o mesmo banco de dados do <strong>Scrap IQ</strong> — os registros de produção, motivos de parada e a matriz de custo são importados por lá. Aqui você só aponta para o mesmo projeto.</p>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
         <div class="fg" style="flex:2;min-width:260px">
           <label>URL do Projeto</label>
@@ -348,45 +349,18 @@ canvas{cursor:pointer}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary btn-sm" onclick="supaSaveTest()">💾 Salvar e Testar Conexão</button>
         <button class="btn btn-ghost btn-sm" id="supaToggleBtn" onclick="supaToggle()">☁ Ativar Nuvem</button>
-        <button class="btn btn-success btn-sm" onclick="supaMigrate()">⇪ Migrar Dados Locais → Nuvem</button>
+        <button class="btn btn-success btn-sm" onclick="supaMigrate()">⇪ Migrar De/Para e Metas Locais → Nuvem</button>
       </div>
       <details style="margin-top:12px">
-        <summary style="cursor:pointer;font-size:11px;color:var(--primary);font-weight:600">📘 Guia passo a passo + SQL da tabela</summary>
+        <summary style="cursor:pointer;font-size:11px;color:var(--primary);font-weight:600">📘 Guia rápido</summary>
         <div style="font-size:11px;color:var(--muted);line-height:1.9;margin-top:8px">
-          1. Crie conta/projeto em <strong>supabase.com</strong> (região São Paulo).<br>
-          2. <strong>SQL Editor</strong> → New query → cole o SQL abaixo → <strong>RUN</strong>.<br>
-          3. <strong>Settings → API</strong> → copie <em>Project URL</em> e <em>anon public</em>.<br>
-          4. Cole aqui → <strong>Salvar e Testar Conexão</strong> → <strong>Ativar Nuvem</strong>.<br>
-          5. Use <strong>Migrar</strong> para copiar os dados locais existentes para a nuvem.<br>
-          6. Deploy compartilhado: crie um <code>config.json</code> ao lado do HTML — os valores dele sempre vencem os salvos localmente.
+          1. Use a <strong>mesma URL e chave anon</strong> já configuradas no Scrap IQ (mesmo projeto Supabase).<br>
+          2. Cole aqui → <strong>Salvar e Testar Conexão</strong> → <strong>Ativar Nuvem</strong>.<br>
+          3. Os registros de produção, motivos de parada e custo aparecem automaticamente assim que o Scrap IQ importar o Plano Diário do dia.<br>
+          4. Deploy compartilhado: crie um <code>config.json</code> ao lado do HTML com a mesma URL/chave — os valores dele sempre vencem os salvos localmente.
         </div>
-        <pre style="margin-top:8px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:10px;overflow-x:auto;color:var(--text)">create table if not exists pd_store (
-  store text not null,
-  key   text not null,
-  doc   jsonb not null,
-  updated_at timestamptz default now(),
-  primary key (store, key)
-);
-
-alter table pd_store enable row level security;
-
-create policy "pd_store_all" on pd_store
-  for all using (true) with check (true);</pre>
       </details>
-      <p style="font-size:10px;color:var(--muted);margin-top:8px">Modo híbrido: com a nuvem ativa, leituras e gravações vão ao Supabase; desativada, tudo funciona no armazenamento local (IndexedDB). O app nunca depende da nuvem.</p>
-    </div>
-
-    <!-- IMPORTAÇÃO -->
-    <div class="section-card">
-      <div class="sec-head"><span class="sec-title">📂 Importação de Dados (.xlsx)</span></div>
-    <div class="drop-zone" id="dropZone">
-      <span class="dz-icon">📂</span>
-      <div class="dz-title">Arraste e solte os arquivos .xlsx aqui</div>
-      <div class="dz-sub">Aceita múltiplos arquivos • Abas: 1T, 2T, 3T • Dados na mesma data/turno/código são substituídos pelos mais recentes</div>
-      <input type="file" id="fileInput" accept=".xlsx,.xls" multiple style="display:none">
-    </div>
-    <div class="status-bar" id="impStatus" style="margin-top:10px">
-      <div class="sdot"></div><span id="impStatusMsg">Aguardando importação...</span>
+      <p style="font-size:10px;color:var(--muted);margin-top:8px">Registros, motivos de parada e custo são <strong>somente leitura</strong> aqui — a importação acontece no Scrap IQ. De/Para e Metas continuam sendo gerenciados neste app.</p>
     </div>
 
     <!-- META -->
@@ -413,26 +387,7 @@ create policy "pd_store_all" on pd_store
       </div>
     </div>
 
-        <!-- MATRIZ DE CUSTO DO REFUGO -->
-    <div class="section-card">
-      <div class="sec-head">
-        <span class="sec-title">💰 Matriz de Custo do Refugo</span>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="exportCustosCSV()">⬇ CSV</button>
-          <button class="btn btn-ghost btn-sm" onclick="clearCustos()" style="color:var(--danger);border-color:var(--danger)">🗑 Limpar Custos</button>
-        </div>
-      </div>
-      <div class="drop-zone" id="dropCusto" style="padding:22px 20px">
-        <span class="dz-icon" style="font-size:24px">📦</span>
-        <div class="dz-title" style="font-size:13px">Arraste a Matriz de Custo (mesmo arquivo usado no Scrap IQ)</div>
-        <div class="dz-sub">Col A: Código · Col B: Descrição · Col E: Custo unitário — sobrescreve a base existente</div>
-        <input type="file" id="custoFileInput" accept=".xlsx,.xls,.csv" style="display:none">
-      </div>
-      <div id="custoMsg" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
-      <p style="font-size:10px;color:var(--muted);margin-top:6px">Vinculado pelo código de 7 dígitos — o mesmo usado nos registros de produção e na tabela De/Para.</p>
-    </div>
-
-        <!-- DE/PARA TABLE -->
+    <!-- DE/PARA TABLE -->
     <div class="section-card">
       <div class="sec-head">
         <span class="sec-title">Tabela De/Para — Cód. Acabado × WIP × Molde</span>
@@ -440,7 +395,6 @@ create policy "pd_store_all" on pd_store
           <label class="btn btn-ghost btn-sm" style="cursor:pointer">⬆ CSV<input type="file" id="dpImport" accept=".csv" style="display:none" onchange="importDpCSV(this)"></label>
           <button class="btn btn-ghost btn-sm" onclick="exportDpCSV()">⬇ CSV</button>
           <button class="btn btn-primary btn-sm" onclick="addDpRow()">+ Adicionar</button>
-          <button class="btn btn-ghost btn-sm" onclick="clearAllData()" style="color:var(--danger);border-color:var(--danger)">🗑 Limpar Dados</button>
         </div>
       </div>
       <div style="overflow-x:auto;margin-bottom:6px">
@@ -453,40 +407,42 @@ create policy "pd_store_all" on pd_store
       </div>
       <p style="font-size:10px;color:var(--muted)">O link é feito pelos 7 dígitos iniciais do Código Acabado. Usado para agrupamento por Molde nos gráficos.</p>
     </div>
-    </div><!-- /section-card importação -->
 
     <!-- BACKUP -->
-    <div class="sec-head" style="margin-top:20px"><span class="sec-title">💾 Backup &amp; Recuperação</span></div>
-    <div class="bk-grid">
-      <div class="bk-card">
-        <h3>📤 Exportar Dados</h3>
-        <p>Exporte todos os dados e configurações. JSON é completo e restaurável. CSV é ideal para análise por IA.</p>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="exportJSON()">⬇ JSON Completo</button>
-          <button class="btn btn-success" onclick="exportCSVFull()">⬇ CSV Dados</button>
-          <button class="btn btn-ghost" onclick="exportDpCSV()">⬇ CSV De/Para</button>
+    <div class="section-card">
+      <div class="sec-head" style="margin-top:0"><span class="sec-title">💾 Backup &amp; Recuperação (De/Para e Metas)</span></div>
+      <div class="bk-grid">
+        <div class="bk-card">
+          <h3>📤 Exportar</h3>
+          <p>Registros, motivos de parada e custo já ficam salvos no Scrap IQ — aqui é só o que é próprio deste app.</p>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="exportJSON()">⬇ JSON (De/Para + Metas)</button>
+            <button class="btn btn-success" onclick="exportCSVFull()">⬇ CSV Dados (view atual)</button>
+            <button class="btn btn-ghost" onclick="exportDpCSV()">⬇ CSV De/Para</button>
+          </div>
+          <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--muted);line-height:1.7">
+            <strong>JSON</strong>: De/Para + Metas (Aderência/DownTime) — o que é próprio deste app.<br>
+            <strong>CSV Dados</strong>: snapshot dos registros carregados no momento (somente leitura, vem do Scrap IQ).<br>
+            <strong>CSV De/Para</strong>: somente a tabela de mapeamento Produto×Molde.
+          </div>
         </div>
-        <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--muted);line-height:1.7">
-          <strong>JSON</strong>: todos registros + stopCodes + De/Para + metadados.<br>
-          <strong>CSV Dados</strong>: uma linha por registro com todos os campos e minutos de parada.<br>
-          <strong>CSV De/Para</strong>: somente a tabela de mapeamento Produto×Molde.
+        <div class="bk-card">
+          <h3>📥 Restaurar Backup</h3>
+          <p>Restaura De/Para e Metas de um JSON exportado por este app. Registros/motivos/custo não são afetados (são geridos pelo Scrap IQ).</p>
+          <div class="restore-drop" id="restDrop" onclick="document.getElementById('restInput').click()">
+            <div style="font-size:26px">📂</div>
+            <div style="font-size:13px;font-weight:600;margin-top:6px">Arraste o JSON aqui ou clique</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">Formato: .json</div>
+            <input type="file" id="restInput" accept=".json" style="display:none" onchange="restoreJSON(this)">
+          </div>
         </div>
       </div>
-      <div class="bk-card">
-        <h3>📥 Restaurar Backup</h3>
-        <p>Restaure um arquivo JSON exportado anteriormente. Os dados em memória serão substituídos.</p>
-        <div class="restore-drop" id="restDrop" onclick="document.getElementById('restInput').click()">
-          <div style="font-size:26px">📂</div>
-          <div style="font-size:13px;font-weight:600;margin-top:6px">Arraste o JSON aqui ou clique</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:3px">Formato: .json</div>
-          <input type="file" id="restInput" accept=".json" style="display:none" onchange="restoreJSON(this)">
-        </div>
+      <div class="bk-card" style="margin-top:14px">
+        <h3>📊 Estado Atual</h3>
+        <div id="bkSummary" style="margin-top:12px;color:var(--muted);font-size:12px">Nenhum dado carregado.</div>
       </div>
     </div>
-    <div class="bk-card">
-      <h3>📊 Estado Atual</h3>
-      <div id="bkSummary" style="margin-top:12px;color:var(--muted);font-size:12px">Nenhum dado carregado.</div>
-    </div>
+
   </div>
 </div>
 
@@ -564,143 +520,6 @@ function toggleTurno(evt,t){
     document.getElementById('tgl'+tk).classList.toggle('on',activeTurnos.has(tk));
   });
   applyFilters();
-}
-
-/* ═══════════════ FILE IMPORT ═════════════════════════════════ */
-const dz=document.getElementById('dropZone'),fi=document.getElementById('fileInput');
-dz.addEventListener('click',()=>fi.click());
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dz-over');});
-['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,()=>dz.classList.remove('dz-over')));
-dz.addEventListener('drop',e=>{e.preventDefault();processFiles([...e.dataTransfer.files]);});
-fi.addEventListener('change',()=>processFiles([...fi.files]));
-
-async function processFiles(files){
-  if(!files.length)return;
-  setImpSt('loading',`Processando ${files.length} arquivo(s)...`);
-  const TARGETS=['1T','2T','3T'];
-  const newRows=[];
-  let scBuilt=stopCodes.length>0;
-  const fileErrors=[]; // arquivos rejeitados por inconsistência de data
-
-  for(const file of files){
-    try{
-      const buf=await readBuf(file);
-      const wb=XLSX.read(buf,{type:'array',cellDates:true});
-
-      // ── FASE 1: lê a data (célula F1) de cada aba 1T/2T/3T presente ──
-      const sheetInfo={}; // tKey -> {sd, dataISO, turnoDisp}
-      for(const sn of wb.SheetNames){
-        const norm=sn.toUpperCase().trim();
-        const tKey=TARGETS.find(t=>norm===t||norm.includes(t));
-        if(!tKey)continue;
-        const ws=wb.Sheets[sn];
-        const sd=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-        if(sd.length<4)continue;
-        const dataISO=toISO(sd[0][5]??'');
-        const turnoDisp=(sd[1][5]??sn).toString().trim()||tKey;
-        sheetInfo[tKey]={sd,dataISO,turnoDisp};
-      }
-      const tKeysFound=Object.keys(sheetInfo);
-      if(!tKeysFound.length)continue; // nenhuma aba 1T/2T/3T reconhecida
-
-      // ── FASE 2: valida consistência de datas ─────────────────────────
-      // 2a) todas as abas do arquivo devem ter a MESMA data
-      const uniqueDates=[...new Set(tKeysFound.map(k=>sheetInfo[k].dataISO))];
-      if(uniqueDates.length>1){
-        const detalhe=tKeysFound.map(k=>`${k}=${brDate(sheetInfo[k].dataISO)}`).join(', ');
-        fileErrors.push(`"${file.name}": datas divergentes entre abas (${detalhe}) — importação cancelada.`);
-        continue;
-      }
-      const fileDate=uniqueDates[0];
-
-      // 2b) a data deve bater com o padrão ddmm no nome do arquivo (quando reconhecível)
-      const ddmm=extractDateDDMMFromFilename(file.name);
-      if(ddmm){
-        const dayPart=fileDate.slice(8,10),monPart=fileDate.slice(5,7);
-        if(dayPart!==ddmm.dd||monPart!==ddmm.mm){
-          fileErrors.push(`"${file.name}": data das abas (${brDate(fileDate)}) não confere com o nome do arquivo (dia ${ddmm.dd}/mês ${ddmm.mm}) — importação cancelada.`);
-          continue;
-        }
-      }
-
-      // ── FASE 3: extração normal das linhas (arquivo validado) ────────
-      for(const tKey of tKeysFound){
-        const{sd,dataISO,turnoDisp}=sheetInfo[tKey];
-        if(!scBuilt&&sd[0]&&sd[1]){
-          const tmp=[];
-          for(let c=SCOL;c<=ECOL;c++){
-            const code=sd[0][c]?.toString().trim(),desc=sd[1][c]?.toString().trim();
-            if(code&&desc)tmp.push({code,desc});
-          }
-          if(tmp.length){stopCodes=tmp;scBuilt=true;}
-        }
-        const semana=isoWeek(dataISO);
-        let lastMaq='';
-        for(let r=3;r<sd.length;r++){
-          const row=sd[r]; if(!row)continue;
-          // Para a extração ao encontrar linhas de total na coluna B
-          const colB=(row[1]??'').toString().trim();
-          if(colB==='Total Geral Programado'||colB==='Total Programado Acabado')break;
-          const codRaw=row[2]?.toString().trim();
-          if(!codRaw||/cod\s*sap/i.test(codRaw))continue;
-          const codigo=codRaw.replace(/\D/g,'').substring(0,7);
-          if(codigo.length<5)continue;
-          const maqCell=row[1]?.toString().trim();
-          if(maqCell)lastMaq=maqCell;
-          const plano=pn(row[5]),realizado=pn(row[6]),refugo=pn(row[8]);
-          const comentario=(row[10]??'').toString().trim().replace(/[\n\r]+/g,' ');
-          const descricao=(row[3]??'').toString().trim();
-          const moldeSrc=(row[4]??'').toString().trim();
-          if(!plano&&!realizado&&!refugo&&!comentario)continue;
-          const paradas={};
-          stopCodes.forEach((sc,i)=>{paradas[sc.code]=pn(row[SCOL+i]);});
-          newRows.push({data:dataISO,semana,turno:tKey,turnoDisp,codigo,descricao,maquina:lastMaq,moldeSrc,plano,realizado,refugo,comentario,paradas,src:file.name});
-        }
-      }
-    }catch(e){console.error(file.name,e);fileErrors.push(`"${file.name}": erro ao processar (${e.message}).`);}
-  }
-
-  // Reporta arquivos rejeitados (não bloqueia os demais arquivos do lote)
-  if(fileErrors.length){
-    console.warn('Importação — arquivos rejeitados:\n'+fileErrors.join('\n'));
-    toast(fileErrors[0]+(fileErrors.length>1?` (+${fileErrors.length-1} outro(s) — veja o console)`:''),'err');
-  }
-
-  // Substitui registros existentes na mesma data/turno/código
-  const keyMap=new Map(rawData.map(d=>[`${d.data}|${d.turno}|${d.codigo}`,d]));
-  let updated=0,added=0;
-  newRows.forEach(d=>{
-    const k=`${d.data}|${d.turno}|${d.codigo}`;
-    if(keyMap.has(k))updated++;else added++;
-    keyMap.set(k,d);
-  });
-  rawData=[...keyMap.values()];
-
-  if(rawData.length&&newRows.length){
-    populateFilterOpts();applyFilters();
-    const msg=`✓ ${rawData.length} registros (${added} novos${updated>0?', '+updated+' atualizados':''}).`+(fileErrors.length?` ⚠ ${fileErrors.length} arquivo(s) rejeitado(s) por data.`:'');
-    setImpSt(fileErrors.length?'warn':'ready',msg);
-    setMainSt('ready',`${rawData.length} registros. Use os filtros para navegar.`);
-    setBadge();
-    if(Supa.active){
-      try{
-        // Dedup de importação: baixa SÓ as chaves p/ contagem multi-máquina
-        const cloudKeys=await Supa.getKeys('registros');
-        let cAdd=0,cUpd=0;
-        newRows.forEach(d=>{cloudKeys.has(regKey(d))?cUpd++:cAdd++;});
-        await Supa.upsert('registros',newRows,regKey); // servidor faz a dedup
-        if(stopCodes.length)await Supa.upsert('stopcodes',stopCodes,s=>s.code);
-        supaStatus('ok',`✓ Nuvem: ${cAdd} novos, ${cUpd} atualizados`);
-      }catch(e){supaStatus('err','Nuvem: '+e.message);toast('Falha ao enviar à nuvem: '+e.message,'err');}
-    }else{
-      await persistData();
-    }
-    if(!fileErrors.length)toast(msg,'ok');
-  } else if(fileErrors.length){
-    setImpSt('warn',`⚠ Nenhum arquivo importado — ${fileErrors.length} rejeitado(s) por inconsistência de data. Veja o console (F12).`);
-  } else {
-    setImpSt('','Nenhum dado válido. Verifique se as abas têm nome 1T, 2T ou 3T.');
-  }
 }
 
 /* ═══════════════ FILTERS ════════════════════════════════════ */
@@ -1416,89 +1235,7 @@ function rebuildCustoMap(){custoMap={};custos.forEach(c=>{custoMap[c.codigo]=c;}
 function getCustoUnit(codigo){return custoMap[codigo]?.unitCost||0;}
 function fmtBRL(n){return'R$\u00a0'+(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 
-const dzCusto=document.getElementById('dropCusto'),fiCusto=document.getElementById('custoFileInput');
-dzCusto.addEventListener('click',()=>fiCusto.click());
-dzCusto.addEventListener('dragover',e=>{e.preventDefault();dzCusto.classList.add('dz-over');});
-['dragleave','drop'].forEach(ev=>dzCusto.addEventListener(ev,()=>dzCusto.classList.remove('dz-over')));
-dzCusto.addEventListener('drop',e=>{e.preventDefault();processCustoFile(e.dataTransfer.files[0]);});
-fiCusto.addEventListener('change',()=>processCustoFile(fiCusto.files[0]));
 
-function parseCustoRows(rows){
-  const items=[];
-  for(let i=1;i<rows.length;i++){
-    const r=rows[i]; if(!r||!r[0])continue;
-    const codigo=String(r[0]).replace(/\D/g,'').substring(0,7);
-    if(!codigo)continue;
-    items.push({codigo,descricao:r[1]?String(r[1]).trim():'',unitCost:parseFloat(r[4])||0});
-  }
-  return items;
-}
-
-async function processCustoFile(file){
-  if(!file)return;
-  const msgEl=document.getElementById('custoMsg');
-  try{
-    const buf=await readBuf(file);
-    const wb=XLSX.read(buf,{type:'array',cellDates:true});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-    if(!rows||rows.length<2){toast('Arquivo vazio ou inválido.','err');return;}
-    // Validação: A1 deve conter "Material", E1 deve conter "Custo" (mesmo padrão do Scrap IQ)
-    const h0=rows[0]||[];
-    const a1=String(h0[0]||'').trim(),e1=String(h0[4]||'').trim();
-    if(!a1.toLowerCase().includes('material')||!e1.toLowerCase().includes('custo')){
-      const msg=`Arquivo inválido: A1 deve conter "Material" (encontrado: "${a1||'—'}") e E1 deve conter "Custo" (encontrado: "${e1||'—'}").`;
-      msgEl.innerHTML=`<span style="color:var(--danger)">✗ ${msg}</span>`;
-      toast(msg,'err');fiCusto.value='';return;
-    }
-    const items=parseCustoRows(rows);
-    if(!items.length){toast('Nenhum código de custo válido (Col A com 7 dígitos numéricos).','err');fiCusto.value='';return;}
-    custos=items;rebuildCustoMap();
-    await saveCustos();
-    msgEl.innerHTML=`<span style="color:var(--success)">✓ ${items.length} itens de custo carregados</span>`;
-    toast(`✓ ${items.length} itens de custo importados.`,'ok');
-    renderKPIs();
-  }catch(e){console.error(e);toast('Erro ao ler arquivo: '+e.message,'err');}
-  fiCusto.value='';
-}
-
-async function saveCustos(){
-  if(Supa.active){
-    try{
-      await Supa.clear('custos'); // replace-all, mesmo comportamento do Scrap IQ
-      if(custos.length)await Supa.upsert('custos',custos,c=>c.codigo);
-      supaStatus('ok',`✓ ${custos.length} custos gravados na nuvem`);
-    }catch(e){supaStatus('err','Custos nuvem: '+e.message);toast('Nuvem: '+e.message,'err');}
-    return;
-  }
-  try{await dbSave('pd_custos',custos);}catch(e){console.warn('custos local:',e);}
-}
-
-async function loadCustosLocal(){
-  if(Supa.active)return; // no modo nuvem, custos vêm de loadPersisted
-  try{const c=await dbGet('pd_custos');if(c){custos=c;rebuildCustoMap();}}catch(e){}
-}
-
-async function clearCustos(){
-  if(!confirm('Apagar toda a Matriz de Custo do Refugo?\nEsta ação não pode ser desfeita.'))return;
-  custos=[];rebuildCustoMap();
-  if(Supa.active){
-    try{await Supa.clear('custos');toast('Custos removidos da nuvem.','ok');}
-    catch(e){toast('Erro ao limpar nuvem: '+e.message,'err');}
-  }else{
-    try{await dbDel('pd_custos');}catch(e){}
-    toast('Custos removidos.','ok');
-  }
-  document.getElementById('custoMsg').textContent='';
-  renderKPIs();
-}
-
-function exportCustosCSV(){
-  if(!custos.length){toast('Sem custos para exportar.','err');return;}
-  let c='Codigo,Descricao,CustoUnitario\n';
-  custos.forEach(r=>{c+=`${r.codigo},"${(r.descricao||'').replace(/"/g,'""')}",${r.unitCost}\n`;});
-  dlFile('matriz_custo_refugo.csv',c,'text/csv');
-}
 function updDp(i,f,v){depara[i][f]=v.trim();saveDp();}
 function rmDp(i){depara.splice(i,1);renderDp();saveDp();}
 function importDpCSV(inp){
@@ -1525,31 +1262,14 @@ function exportDpCSV(){
   depara.forEach(r=>{c+=`${r.codAcabado||''},${r.codWip||''},${r.molde||''},"${(r.descricao||'').replace(/"/g,'""')}"\n`;});
   dlFile('depara.csv',c,'text/csv');
 }
-async function clearAllData(){
-  if(!confirm('Apagar TODOS os dados importados?\nEsta ação não pode ser desfeita.'))return;
-  if(Supa.active){
-    try{
-      const n1=await Supa.clear('registros');
-      const n2=await Supa.clear('stopcodes');
-      toast(`Nuvem: ${n1} registros e ${n2} códigos removidos.`,'ok');
-      supaStatus('ok',`✓ Limpeza: ${n1+n2} linhas removidas`);
-    }catch(e){toast('Erro ao limpar nuvem: '+e.message,'err');return;}
-  }
-  rawData=[];filteredData=[];stopCodes=[];
-  setBadge();setMainSt('','Dados apagados. Importe novos arquivos .xlsx.');
-  renderKPIs();renderAdhCharts();renderPareto();renderSummTable();
-  document.getElementById('commPanel').classList.remove('vis');
-  dbDel('pd_raw');dbDel('pd_sc');
-  localStorage.removeItem('pd_raw');localStorage.removeItem('pd_sc');
-  if(!Supa.active)toast('Dados apagados.','ok');
-}
+
 
 /* ═══════════════ BACKUP / RESTORE ═══════════════════════════ */
 function exportJSON(){
-  if(!rawData.length){toast('Sem dados para exportar.','err');return;}
-  const payload={version:'11.1',exportedAt:new Date().toISOString(),metaAdh,stopCodes,depara,custos,records:rawData};
-  dlFile(`backup_pd_${stamp()}.json`,JSON.stringify(payload,null,2),'application/json');
-  toast(`✓ JSON exportado (${rawData.length} registros).`,'ok');
+  if(!depara.length && metaAdh===95 && metaDowntime===1000){toast('Nada para exportar (De/Para vazio e metas no padrão).','err');return;}
+  const payload={version:'12.0',exportedAt:new Date().toISOString(),metaAdh,metaDowntime,depara};
+  dlFile(`backup_dashsf_${stamp()}.json`,JSON.stringify(payload,null,2),'application/json');
+  toast(`✓ JSON exportado (De/Para + Metas).`,'ok');
 }
 function exportCSVFull(){
   if(!rawData.length){toast('Sem dados para exportar.','err');return;}
@@ -1583,17 +1303,15 @@ function exportSumCSV(){
 function restoreJSON(inp){
   const file=inp.files[0];if(!file)return;
   const r=new FileReader();
-  r.onload=async e=>{
+  r.onload=e=>{
     try{
       const p=JSON.parse(e.target.result);
-      rawData=p.records||[];stopCodes=p.stopCodes||[];depara=p.depara||[];custos=p.custos||[];rebuildCustoMap();
+      depara=p.depara||[];
       if(p.metaAdh!=null){metaAdh=p.metaAdh;const mi=document.getElementById('metaInput');if(mi)mi.value=metaAdh;}
       if(p.metaDowntime!=null){metaDowntime=p.metaDowntime;const mdmi=document.getElementById('metaDTInput');if(mdmi)mdmi.value=metaDowntime;}
-      renderDp();populateFilterOpts();applyFilters();setBadge();
-      setMainSt('ready',`${rawData.length} registros restaurados do backup.`);
-      setImpSt('ready',`✓ Restaurado: ${rawData.length} registros.`);
-      await persistData();saveDp();
-      toast(`✓ Backup restaurado (${rawData.length} registros).`,'ok');
+      renderDp();saveDp();applyFilters();
+      syncMetasCloud();
+      toast(`✓ Backup restaurado (De/Para + Metas).`,'ok');
     }catch(err){toast('Erro ao restaurar: '+err.message,'err');}
   };
   r.readAsText(file);inp.value='';
@@ -1634,34 +1352,26 @@ async function dbSave(key,value){try{await _db.kv.put({key,value});}catch(e){con
 async function dbGet(key){try{const r=await _db.kv.get(key);return r?r.value:null;}catch(e){return null;}}
 async function dbDel(key){try{await _db.kv.delete(key);}catch(e){}}
 
-async function persistData(){
-  if(Supa.active){
-    try{
-      await Supa.upsert('registros',rawData,regKey);
-      if(stopCodes.length)await Supa.upsert('stopcodes',stopCodes,s=>s.code);
-      supaStatus('ok',`✓ ${rawData.length} registros gravados na nuvem`);
-    }catch(e){supaStatus('err','Gravação nuvem: '+e.message);toast('Nuvem: '+e.message,'err');}
-    return;
-  }
-  await dbSave('pd_raw',rawData);
-  try{localStorage.setItem('pd_sc',JSON.stringify(stopCodes));}catch(e){}
-}
+
 
 async function loadPersisted(){
   // ── FONTE: NUVEM ────────────────────────────────────────────────
   if(Supa.active&&Supa.cfgOk()){
     try{
       setMainSt('loading','☁ Carregando dados da nuvem...');
-      const{regs,scs,dps,cfg,custosArr}=await Supa.loadAll();
+      const{regs,scs,dps,cfg,costsArr}=await Supa.loadAll();
       rawData=regs;stopCodes=scs;depara=dps;renderDp();
-      custos=custosArr||[];rebuildCustoMap();
+      // O Scrap IQ não grava `semana` nos registros — calcular aqui na leitura
+      rawData.forEach(d=>{if(!d.semana)d.semana=isoWeek(d.data);});
+      // Adaptar o formato de custo do Scrap IQ (materialCode/materialDesc) para o do Dash SF (codigo/descricao)
+      custos=(costsArr||[]).map(c=>({codigo:c.materialCode,descricao:c.materialDesc||'',unitCost:c.unitCost||0}));
+      rebuildCustoMap();
       if(cfg){
         if(cfg.metaAdh!=null){metaAdh=cfg.metaAdh;const mi=document.getElementById('metaInput');if(mi)mi.value=metaAdh;}
         if(cfg.metaDowntime!=null){metaDowntime=cfg.metaDowntime;const md=document.getElementById('metaDTInput');if(md)md.value=metaDowntime;}
       }
       populateFilterOpts();applyFilters();setBadge();
       setMainSt('ready',`☁ ${rawData.length} registros carregados da nuvem.`);
-      setImpSt('ready',`☁ ${rawData.length} registros (nuvem).`);
       supaStatus('ok',`✓ ${rawData.length} registros carregados às ${new Date().toLocaleTimeString('pt-BR')}`);
       return;
     }catch(e){
@@ -1686,7 +1396,6 @@ async function loadPersisted(){
       rawData=raw;
       populateFilterOpts();applyFilters();setBadge();
       setMainSt('ready',`${rawData.length} registros restaurados da sessão anterior.`);
-      setImpSt('ready',`✓ ${rawData.length} registros da sessão.`);
     }
   }catch(e){
     console.error('loadPersisted',e);
@@ -1700,7 +1409,6 @@ async function loadPersisted(){
    Stores: registros | stopcodes | depara | config
    ════════════════════════════════════════════════════════════════ */
 function djb2(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return(h>>>0).toString(36);}
-const regKey=d=>`${d.data}|${d.turno}|${d.codigo}`;       // mesma chave da dedup local
 const dpKey =r=>djb2(`${r.codAcabado||''}|${r.codWip||''}|${r.molde||''}|${r.descricao||''}`);
 
 const Supa={
@@ -1709,7 +1417,7 @@ const Supa={
   // Sanitiza URL colada: remove barras finais e /rest/v1 (evita 404 PGRST125)
   sanitize(u){return(u||'').trim().replace(/\/+$/,'').replace(/\/rest\/v1$/,'').replace(/\/+$/,'');},
   hdr(extra){return Object.assign({'apikey':this.key,'Authorization':'Bearer '+this.key,'Content-Type':'application/json'},extra||{});},
-  ep(q){return this.url+'/rest/v1/pd_store'+(q||'');},
+  ep(q){return this.url+'/rest/v1/scrapiq_store'+(q||'');},
   cfgOk(){return !!(this.url&&this.key);},
 
   async test(){
@@ -1787,10 +1495,10 @@ const Supa={
 
   // loadAll: todos os stores em paralelo
   async loadAll(){
-    const[regs,scs,dps,cfgs,custosArr]=await Promise.all([
-      this.getAll('registros'),this.getAll('stopcodes'),this.getAll('depara'),this.getAll('config'),this.getAll('custos')
+    const[regs,scs,dps,cfgs,costsArr]=await Promise.all([
+      this.getAll('registros'),this.getAll('stopcodes'),this.getAll('depara'),this.getAll('config'),this.getAll('costs')
     ]);
-    return{regs,scs,dps,cfg:cfgs.length?cfgs[0]:null,custosArr};
+    return{regs,scs,dps,cfg:cfgs.length?cfgs[0]:null,costsArr};
   }
 };
 
@@ -1818,7 +1526,7 @@ async function supaToggle(){
     supaSetActive(false);
     supaStatus('','Nuvem desativada.');
     toast('Nuvem desativada. Recarregando dados locais...','ok');
-    await loadPersisted();loadDp();await loadCustosLocal();renderKPIs();
+    await loadPersisted();loadDp();renderKPIs();
   }else{
     if(!Supa.cfgOk()){toast('Configure e teste a conexão primeiro.','err');return;}
     supaStatus('','Validando conexão...');
@@ -1833,25 +1541,19 @@ async function supaToggle(){
 
 async function supaMigrate(){
   if(!Supa.cfgOk()){toast('Configure a conexão primeiro.','err');return;}
-  // Leitura FORÇADA do armazenamento local (ignora Supa.active)
-  let lRaw=[];try{lRaw=(await dbGet('pd_raw'))||[];}catch(e){}
-  let lSc=[]; try{lSc=JSON.parse(localStorage.getItem('pd_sc')||'[]');}catch(e){}
+  // Leitura FORÇADA do armazenamento local (ignora Supa.active) — só o que é próprio deste app
   let lDp=[]; try{lDp=JSON.parse(localStorage.getItem('pd_dp2')||'[]');}catch(e){}
-  let lCustos=[]; try{lCustos=(await dbGet('pd_custos'))||[];}catch(e){}
   const mA=parseFloat(localStorage.getItem('pd_meta'))||metaAdh;
   const mD=parseFloat(localStorage.getItem('pd_meta_dt'))||metaDowntime;
-  if(!lRaw.length&&!lDp.length&&!lSc.length&&!lCustos.length){toast('Nenhum dado local para migrar.','err');return;}
-  if(!confirm(`Migrar dados locais para a nuvem:\n\n• ${lRaw.length} registros de produção\n• ${lSc.length} códigos de parada\n• ${lDp.length} entradas De/Para\n• ${lCustos.length} itens de custo do refugo\n• Metas: ${mA}% aderência / ${mD} min DownTime\n\nRegistros com a mesma chave na nuvem serão substituídos. Continuar?`))return;
-  supaStatus('','Migrando dados locais → nuvem...');
+  if(!lDp.length){toast('Nenhum dado local de De/Para para migrar (Metas são sempre enviadas).','ok');}
+  if(!confirm(`Migrar dados locais para a nuvem:\n\n• ${lDp.length} entradas De/Para\n• Metas: ${mA}% aderência / ${mD} min DownTime\n\nRegistros de produção, motivos de parada e custo são geridos pelo Scrap IQ e não são afetados. Continuar?`))return;
+  supaStatus('','Migrando De/Para e Metas → nuvem...');
   try{
     await Supa.test();
-    if(lRaw.length)await Supa.upsert('registros',lRaw,regKey);
-    if(lSc.length)await Supa.upsert('stopcodes',lSc,s=>s.code);
     if(lDp.length){await Supa.clear('depara');await Supa.upsert('depara',lDp,dpKey);}
-    if(lCustos.length){await Supa.clear('custos');await Supa.upsert('custos',lCustos,c=>c.codigo);}
     await Supa.upsert('config',[{metaAdh:mA,metaDowntime:mD}],()=>'metas');
-    supaStatus('ok',`✓ Migração concluída: ${lRaw.length} registros enviados`);
-    toast(`✓ ${lRaw.length} registros migrados para a nuvem.`,'ok');
+    supaStatus('ok',`✓ Migração concluída: ${lDp.length} entradas De/Para enviadas`);
+    toast(`✓ De/Para e Metas migrados para a nuvem.`,'ok');
   }catch(e){supaStatus('err','Erro na migração: '+e.message);toast('Erro: '+e.message,'err');}
 }
 
@@ -1912,19 +1614,6 @@ function toggleConfigTab(){
 }
 
 /* ═══════════════ UTILITIES ══════════════════════════════════ */
-function readBuf(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsArrayBuffer(file);});}
-function pn(v){if(!v&&v!==0)return 0;let s=v.toString().replace(/\s/g,'');if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');else if(s.includes(','))s=s.replace(',','.');const n=parseFloat(s);return isNaN(n)?0:n;}
-/** Extrai dia/mês do nome do arquivo, formato "...-ddmm.xlsx" (ex: Plano Diario-2606.xlsx → dia 26, mês 06).
- *  Retorna null se o padrão não for encontrado ou os valores forem inválidos (não bloqueia a importação nesse caso). */
-function extractDateDDMMFromFilename(name){
-  const base=name.replace(/\.[^.]+$/,'');       // remove a extensão
-  const m=base.match(/[-_ ](\d{4})$/);           // últimos 4 dígitos após - _ ou espaço
-  if(!m)return null;
-  const dd=m[1].slice(0,2),mm=m[1].slice(2,4);
-  const ddN=+dd,mmN=+mm;
-  if(ddN<1||ddN>31||mmN<1||mmN>12)return null;
-  return{dd,mm};
-}
 function toISO(v){if(!v)return'1970-01-01';if(v instanceof Date)return v.toISOString().slice(0,10);const s=v.toString().trim();if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);if(/^\d{2}\/\d{2}\/\d{4}/.test(s)){const[d,m,y]=s.split('/');return`${y}-${m}-${d}`;}if(/^\d{2}\/\d{2}\/\d{2}$/.test(s)){const[d,m,y]=s.split('/');return`20${y}-${m}-${d}`;}return s;}
 function isoWeek(iso){const[y,m,d]=iso.split('-').map(Number);const dt=new Date(y,m-1,d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()+4-(dt.getDay()||7));const y0=new Date(dt.getFullYear(),0,1);return'WK'+Math.ceil((((dt-y0)/86400000)+1)/7).toString().padStart(2,'0');}
 function brDate(iso){if(!iso||iso==='1970-01-01')return iso;const[y,m,d]=iso.split('-');return`${d}/${m}/${y}`;}
@@ -1949,7 +1638,6 @@ function grpKey(d,grp){
   return d.moldeSrc||'(sem molde)';
 }
 function setMainSt(cls,msg){const b=document.getElementById('mainStatus');b.className='status-bar '+(cls||'');document.getElementById('mainStatusMsg').innerHTML=msg;}
-function setImpSt(cls,msg){const b=document.getElementById('impStatus');b.className='status-bar '+(cls||'');document.getElementById('impStatusMsg').textContent=msg;}
 function setBadge(){document.getElementById('recBadge').textContent=rawData.length?`${rawData.length} registros`:'Sem dados';}
 function toast(msg,type=''){const el=document.getElementById('toast');el.textContent=msg;el.className=`toast show ${type}`;setTimeout(()=>el.className='toast',3200);}
 
@@ -1971,10 +1659,9 @@ function toast(msg,type=''){const el=document.getElementById('toast');el.textCon
   updateCloudUI();
   // 2) Carrega dados da fonte ativa (nuvem ou local)
   await loadPersisted();
-  loadDp(); // no-op se nuvem ativa
-  await loadCustosLocal(); // no-op se nuvem ativa (já veio de loadPersisted)
+  loadDp(); // no-op se nuvem ativa (depara já veio de loadPersisted nesse caso)
   if(rawData.length){
-    renderKPIs(); // garante que o card de Custo reflita a matriz local recém-carregada
+    renderKPIs();
     applyDefaultMonthFilter(); // mês atual + motivo principal do Pareto pré-selecionados
   }
 })();
