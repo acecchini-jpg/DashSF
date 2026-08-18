@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v13.1</title>
+<title>Dashboard Programação Diária v14</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -86,6 +86,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .grupo-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap}
 .grupo-title{font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
 .grupo-count{font-size:10px;font-weight:600;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:10px}
+.chip-pick{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:3px 9px;border-radius:12px;font-size:11px;cursor:pointer;transition:all .15s}
+.chip-pick:hover{border-color:var(--primary);color:var(--primary)}
 .kpi-sub{font-size:10px;color:var(--muted)}
 
 /* CHARTS */
@@ -167,7 +169,7 @@ canvas{cursor:pointer}
 <body>
 
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v13.1</span></h1>
+  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v14</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
@@ -345,18 +347,30 @@ canvas{cursor:pointer}
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div class="fg" style="min-width:130px">
+          <label>Tipo</label>
+          <select id="grpTipoInput" onchange="toggleGrpTipoUI()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:5px;font-size:12px;outline:none">
+            <option value="produto">Produto</option>
+            <option value="maquina">Máquina</option>
+          </select>
+        </div>
         <div class="fg" style="flex:1;min-width:180px">
           <label>Nome do Grupo</label>
           <input type="text" id="grpNomeInput" autocomplete="off" placeholder="Ex: Montagem MPI" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:5px;font-size:12px;outline:none;width:100%">
         </div>
-        <div class="fg" style="flex:2;min-width:280px">
+        <div class="fg" style="flex:2;min-width:280px" id="grpCodigosWrap">
           <label>Códigos (separados por vírgula, espaço ou linha)</label>
           <textarea id="grpCodigosInput" rows="1" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:5px;font-size:12px;outline:none;width:100%;resize:vertical;font-family:inherit" placeholder="1174216, 1234567, 7654321..."></textarea>
+        </div>
+        <div class="fg" style="flex:2;min-width:280px;display:none" id="grpMaquinasWrap">
+          <label>Máquinas (separadas por vírgula ou linha) — clique para adicionar da lista</label>
+          <textarea id="grpMaquinasInput" rows="1" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:5px;font-size:12px;outline:none;width:100%;resize:vertical;font-family:inherit" placeholder="M-12, M-14..."></textarea>
+          <div id="grpMaquinasChips" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px"></div>
         </div>
         <button class="btn btn-primary btn-sm" id="grpFormBtn" onclick="addGrupo()">+ Criar Grupo</button>
         <button class="btn btn-ghost btn-sm" id="grpCancelBtn" onclick="cancelEditGrupo()" style="display:none">Cancelar</button>
       </div>
-      <p style="font-size:10px;color:var(--muted);margin-top:8px">Os grupos ficam salvos <strong>somente neste navegador</strong> (não sincronizam com a nuvem) — use exportar/importar para levar para outro computador. Os filtros do topo (mesmos da aba Dashboard) se aplicam aqui.</p>
+      <p style="font-size:10px;color:var(--muted);margin-top:8px">Os grupos ficam salvos <strong>somente neste navegador</strong> (não sincronizam com a nuvem) — use exportar/importar para levar para outro computador. Os filtros do topo (mesmos da aba Dashboard) se aplicam aqui — inclusive a busca por nome de grupo.</p>
     </div>
 
     <div id="gruposContainer"></div>
@@ -491,6 +505,7 @@ canvas{cursor:pointer}
 <div class="toast" id="toast"></div>
 
 <script>
+
 /* ═══════════════ STATE ═══════════════════════════════════════ */
 let rawData      = [];
 let stopCodes    = [];
@@ -597,7 +612,7 @@ function applyFilters(){
   // Pré-calcula códigos de parada que batem com a busca (ex: OR01)
   const buscaStops=busca?stopCodes.filter(sc=>sc.code.toLowerCase()===busca||sc.desc.toLowerCase().includes(busca)):[];
   activeBuscaStops=buscaStops; // exposto para os gráficos DownTime
-  const buscaGrupoSet=buscaGrupoCodigos(busca); // códigos cobertos por grupo(s) cujo nome bate com a busca
+  const buscaGrupoSet=buscaGrupoMatch(busca); // códigos/máquinas cobertos por grupo(s) cujo nome bate com a busca
 
   filteredData=rawData.filter(d=>{
     if(ano&&!d.data.startsWith(ano))return false;
@@ -611,7 +626,7 @@ function applyFilters(){
       const h=`${d.codigo} ${d.descricao} ${d.maquina} ${getMolde(d)}`.toLowerCase();
       const textOk=h.includes(busca);
       const stopOk=buscaStops.length>0&&buscaStops.some(sc=>(d.paradas[sc.code]||0)>0);
-      const grupoOk=buscaGrupoSet.has(d.codigo);
+      const grupoOk=buscaGrupoSet.codigos.has(d.codigo)||buscaGrupoSet.maquinas.has(d.maquina);
       if(!textOk&&!stopOk&&!grupoOk)return false;
     }
     return true;
@@ -756,7 +771,7 @@ function buildAdhBase({useAno=false,useMes=false}={}){
   const mes=document.getElementById('fMes').value;
   const busca=document.getElementById('fBusca').value.toLowerCase().trim();
   const buscaStops=busca?stopCodes.filter(sc=>sc.code.toLowerCase()===busca||sc.desc.toLowerCase().includes(busca)):[];
-  const buscaGrupoSet=buscaGrupoCodigos(busca);
+  const buscaGrupoSet=buscaGrupoMatch(busca);
   return rawData.filter(d=>{
     if(useAno&&ano&&!d.data.startsWith(ano))return false;
     if(useMes&&mes&&+d.data.slice(5,7)!==+mes)return false;
@@ -765,7 +780,7 @@ function buildAdhBase({useAno=false,useMes=false}={}){
       const h=`${d.codigo} ${d.descricao} ${d.maquina} ${getMolde(d)}`.toLowerCase();
       const textOk=h.includes(busca);
       const stopOk=buscaStops.length>0&&buscaStops.some(sc=>(d.paradas[sc.code]||0)>0);
-      const grupoOk=buscaGrupoSet.has(d.codigo);
+      const grupoOk=buscaGrupoSet.codigos.has(d.codigo)||buscaGrupoSet.maquinas.has(d.maquina);
       if(!textOk&&!stopOk&&!grupoOk)return false;
     }
     return true;
@@ -1682,13 +1697,42 @@ function escHtml(s){
 
 /** Une os códigos de todos os grupos cujo NOME bate com o texto de busca
  *  (mesma lógica de substring usada nos demais campos de busca). */
-function buscaGrupoCodigos(busca){
-  if(!busca||!grupos.length)return new Set();
-  const set=new Set();
+function buscaGrupoMatch(busca){
+  const codigos=new Set(), maquinas=new Set();
+  if(!busca||!grupos.length)return{codigos,maquinas};
   grupos.forEach(g=>{
-    if(g.nome.toLowerCase().includes(busca)) g.codigos.forEach(c=>set.add(c));
+    if(g.nome.toLowerCase().includes(busca)){
+      if(g.tipo==='maquina')(g.maquinas||[]).forEach(m=>maquinas.add(m));
+      else (g.codigos||[]).forEach(c=>codigos.add(c));
+    }
   });
-  return set;
+  return{codigos,maquinas};
+}
+
+function parseMaquinasInput(text){
+  return [...new Set(text.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean))];
+}
+
+function toggleGrpTipoUI(){
+  const tipo=document.getElementById('grpTipoInput').value;
+  document.getElementById('grpCodigosWrap').style.display=tipo==='produto'?'':'none';
+  document.getElementById('grpMaquinasWrap').style.display=tipo==='maquina'?'':'none';
+  if(tipo==='maquina')renderMaquinaChips();
+}
+
+function renderMaquinaChips(){
+  const wrap=document.getElementById('grpMaquinasChips');
+  if(!wrap)return;
+  const known=[...new Set(rawData.map(d=>d.maquina).filter(Boolean))].sort();
+  if(!known.length){wrap.innerHTML='<span style="font-size:10px;color:var(--muted)">Nenhuma máquina encontrada nos dados carregados.</span>';return;}
+  wrap.innerHTML=known.map(m=>`<button type="button" class="chip-pick" onclick="addMaquinaChip(this.dataset.m)" data-m="${escHtml(m)}">${escHtml(m)}</button>`).join('');
+}
+
+function addMaquinaChip(nome){
+  const el=document.getElementById('grpMaquinasInput');
+  const atuais=parseMaquinasInput(el.value);
+  if(!atuais.includes(nome))atuais.push(nome);
+  el.value=atuais.join(', ');
 }
 
 function parseCodigosInput(text){
@@ -1708,21 +1752,29 @@ function saveGrupos(){
 
 function addGrupo(){
   const nomeEl=document.getElementById('grpNomeInput');
-  const codEl=document.getElementById('grpCodigosInput');
+  const tipo=document.getElementById('grpTipoInput').value;
   const nome=nomeEl.value.trim();
-  const codigos=parseCodigosInput(codEl.value);
   if(!nome){toast('Informe um nome para o grupo.','err');return;}
-  if(!codigos.length){toast('Informe ao menos um código válido (mín. 5 dígitos).','err');return;}
+  let codigos=[],maquinas=[];
+  if(tipo==='maquina'){
+    maquinas=parseMaquinasInput(document.getElementById('grpMaquinasInput').value);
+    if(!maquinas.length){toast('Informe ao menos uma máquina.','err');return;}
+  }else{
+    codigos=parseCodigosInput(document.getElementById('grpCodigosInput').value);
+    if(!codigos.length){toast('Informe ao menos um código válido (mín. 5 dígitos).','err');return;}
+  }
   if(grupoEditId){
     const g=grupos.find(x=>x.id===grupoEditId);
-    if(g){g.nome=nome;g.codigos=codigos;}
-    cancelEditGrupo(false);
+    if(g){g.nome=nome;g.tipo=tipo;g.codigos=codigos;g.maquinas=maquinas;}
+    cancelEditGrupo();
     toast(`✓ Grupo "${nome}" atualizado.`,'ok');
   }else{
-    grupos.push({id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),nome,codigos});
+    grupos.push({id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),nome,tipo,codigos,maquinas});
     toast(`✓ Grupo "${nome}" criado.`,'ok');
   }
-  nomeEl.value='';codEl.value='';
+  nomeEl.value='';
+  document.getElementById('grpCodigosInput').value='';
+  document.getElementById('grpMaquinasInput').value='';
   saveGrupos();renderGrupos();
 }
 
@@ -1730,20 +1782,26 @@ function editGrupo(id){
   const g=grupos.find(x=>x.id===id);
   if(!g)return;
   grupoEditId=id;
+  const tipo=g.tipo||'produto';
   document.getElementById('grpNomeInput').value=g.nome;
-  document.getElementById('grpCodigosInput').value=g.codigos.join(', ');
+  document.getElementById('grpTipoInput').value=tipo;
+  toggleGrpTipoUI();
+  if(tipo==='maquina')document.getElementById('grpMaquinasInput').value=(g.maquinas||[]).join(', ');
+  else document.getElementById('grpCodigosInput').value=(g.codigos||[]).join(', ');
   document.getElementById('grpFormBtn').textContent='💾 Salvar Alterações';
   document.getElementById('grpCancelBtn').style.display='inline-flex';
   document.getElementById('grpNomeInput').scrollIntoView({behavior:'smooth',block:'center'});
 }
 
-function cancelEditGrupo(clearMsg=true){
+function cancelEditGrupo(){
   grupoEditId=null;
   document.getElementById('grpNomeInput').value='';
   document.getElementById('grpCodigosInput').value='';
+  document.getElementById('grpMaquinasInput').value='';
+  document.getElementById('grpTipoInput').value='produto';
+  toggleGrpTipoUI();
   document.getElementById('grpFormBtn').textContent='+ Criar Grupo';
   document.getElementById('grpCancelBtn').style.display='none';
-  if(clearMsg){} // reservado
 }
 
 function removeGrupo(id){
@@ -1755,9 +1813,18 @@ function removeGrupo(id){
   toast('Grupo removido.','ok');
 }
 
-/** Agrega plano/realizado/refugo/custo por código (dentro de `filteredData`)
- *  e monta os resumos Global / Acabado / WIP para um grupo. */
-function computeGroupStats(codigos){
+function summarizeGroupRows(list,custoFn){
+  const plano=list.reduce((s,d)=>s+d.plano,0);
+  const realizado=list.reduce((s,d)=>s+d.realizado,0);
+  const refugo=list.reduce((s,d)=>s+d.refugo,0);
+  const custo=list.reduce((s,d)=>s+custoFn(d),0);
+  const div=refugo+realizado;
+  return{plano,realizado,refugo,custo,adh:plano>0?(realizado/plano*100):null,scrapPct:div>0?(refugo/div*100):null};
+}
+
+/** Agrega plano/realizado/refugo/custo por CÓDIGO (dentro de `filteredData`)
+ *  e monta os resumos Global / Acabado / WIP para um grupo tipo Produto. */
+function computeGroupStatsPorProduto(codigos){
   const codeSet=new Set(codigos);
   const rows=filteredData.filter(d=>codeSet.has(d.codigo));
   const byCode={};
@@ -1781,40 +1848,89 @@ function computeGroupStats(codigos){
     it.custoTotal=it.refugo*it.custoUnit;
     return it;
   });
-  function summarize(list){
-    const plano=list.reduce((s,d)=>s+d.plano,0);
-    const realizado=list.reduce((s,d)=>s+d.realizado,0);
-    const refugo=list.reduce((s,d)=>s+d.refugo,0);
-    const custo=list.reduce((s,d)=>s+d.custoTotal,0);
-    const div=refugo+realizado;
-    return{plano,realizado,refugo,custo,adh:plano>0?(realizado/plano*100):null,scrapPct:div>0?(refugo/div*100):null};
-  }
   const acabadoItems=items.filter(d=>!d.isWip);
   const wipItems=items.filter(d=>d.isWip);
-  return{items,global:summarize(items),acabado:summarize(acabadoItems),wip:summarize(wipItems)};
+  return{tipo:'produto',items,
+    global:summarizeGroupRows(items,d=>d.custoTotal),
+    acabado:summarizeGroupRows(acabadoItems,d=>d.custoTotal),
+    wip:summarizeGroupRows(wipItems,d=>d.custoTotal)};
+}
+
+/** Agrega plano/realizado/refugo/custo por MÁQUINA (dentro de `filteredData`)
+ *  — todos os produtos que rodaram nela ficam somados numa linha só. */
+function computeGroupStatsPorMaquina(maquinas){
+  const maqSet=new Set(maquinas);
+  const rows=filteredData.filter(d=>maqSet.has(d.maquina));
+  const byMaq={};
+  rows.forEach(d=>{
+    if(!byMaq[d.maquina])byMaq[d.maquina]={maquina:d.maquina,plano:0,realizado:0,refugo:0,custoTotal:0,produtosSet:new Set()};
+    const uc=getCustoUnit(d.codigo);
+    byMaq[d.maquina].plano+=d.plano;
+    byMaq[d.maquina].realizado+=d.realizado;
+    byMaq[d.maquina].refugo+=d.refugo;
+    byMaq[d.maquina].custoTotal+=d.refugo*uc;
+    byMaq[d.maquina].produtosSet.add(d.codigo);
+  });
+  const items=maquinas.map(m=>{
+    if(byMaq[m])return{...byMaq[m],produtosCount:byMaq[m].produtosSet.size};
+    return{maquina:m,plano:0,realizado:0,refugo:0,custoTotal:0,produtosCount:0};
+  });
+  const acabadoRows=rows.filter(d=>!d.descricao.toUpperCase().startsWith('WIP'));
+  const wipRows=rows.filter(d=>d.descricao.toUpperCase().startsWith('WIP'));
+  return{tipo:'maquina',items,
+    global:summarizeGroupRows(rows,d=>d.refugo*getCustoUnit(d.codigo)),
+    acabado:summarizeGroupRows(acabadoRows,d=>d.refugo*getCustoUnit(d.codigo)),
+    wip:summarizeGroupRows(wipRows,d=>d.refugo*getCustoUnit(d.codigo))};
+}
+
+function computeGroupStats(g){
+  return(g.tipo==='maquina')?computeGroupStatsPorMaquina(g.maquinas||[]):computeGroupStatsPorProduto(g.codigos||[]);
 }
 
 function renderGrupoBlock(g,stats){
   const fmtPct=v=>v!==null?v.toFixed(1).replace('.',',')+' %':'--';
   const fmtScrap=v=>v!==null?v.toFixed(2).replace('.',',')+' %':'--';
-  let rows='';
-  stats.items.forEach(it=>{
-    const adh=it.plano>0?(it.realizado/it.plano*100):null;
-    const ac=adh===null?'':adh>=metaAdh?'a-ok':adh>=(metaAdh*.85)?'a-warn':'a-bad';
-    const chip=it.isWip?'<span class="chip ch-wip">WIP</span>':'<span class="chip ch-fg">FG</span>';
-    rows+=`<tr>
-      <td style="white-space:nowrap">${escHtml(it.codigo)} ${chip}</td>
-      <td style="max-width:220px">${escHtml(it.descricao||'—')}</td>
-      <td class="num">${fn(it.plano)}</td>
-      <td class="num">${fn(it.realizado)}</td>
-      <td class="num ${ac}">${adh!==null?adh.toFixed(1).replace('.',',')+' %':'-'}</td>
-      <td class="num" style="color:var(--danger)">${fn(it.refugo)}</td>
-      <td class="num" style="color:#f5a623">${it.custoTotal>0?fmtBRL(it.custoTotal):'-'}</td>
-    </tr>`;
-  });
+  const isMaq=stats.tipo==='maquina';
+  let theadCols,rows='';
+
+  if(isMaq){
+    theadCols='<th>Máquina</th><th class="num">Produtos</th><th class="num">Plano</th><th class="num">Realizado</th><th class="num">Aderência</th><th class="num">Refugo</th><th class="num">Custo Refugo</th>';
+    stats.items.forEach(it=>{
+      const adh=it.plano>0?(it.realizado/it.plano*100):null;
+      const ac=adh===null?'':adh>=metaAdh?'a-ok':adh>=(metaAdh*.85)?'a-warn':'a-bad';
+      rows+=`<tr>
+        <td style="white-space:nowrap">${escHtml(it.maquina)}</td>
+        <td class="num">${it.produtosCount||0}</td>
+        <td class="num">${fn(it.plano)}</td>
+        <td class="num">${fn(it.realizado)}</td>
+        <td class="num ${ac}">${adh!==null?adh.toFixed(1).replace('.',',')+' %':'-'}</td>
+        <td class="num" style="color:var(--danger)">${fn(it.refugo)}</td>
+        <td class="num" style="color:#f5a623">${it.custoTotal>0?fmtBRL(it.custoTotal):'-'}</td>
+      </tr>`;
+    });
+  }else{
+    theadCols='<th>Código</th><th>Descrição</th><th class="num">Plano</th><th class="num">Realizado</th><th class="num">Aderência</th><th class="num">Refugo</th><th class="num">Custo Refugo</th>';
+    stats.items.forEach(it=>{
+      const adh=it.plano>0?(it.realizado/it.plano*100):null;
+      const ac=adh===null?'':adh>=metaAdh?'a-ok':adh>=(metaAdh*.85)?'a-warn':'a-bad';
+      const chip=it.isWip?'<span class="chip ch-wip">WIP</span>':'<span class="chip ch-fg">FG</span>';
+      rows+=`<tr>
+        <td style="white-space:nowrap">${escHtml(it.codigo)} ${chip}</td>
+        <td style="max-width:220px">${escHtml(it.descricao||'—')}</td>
+        <td class="num">${fn(it.plano)}</td>
+        <td class="num">${fn(it.realizado)}</td>
+        <td class="num ${ac}">${adh!==null?adh.toFixed(1).replace('.',',')+' %':'-'}</td>
+        <td class="num" style="color:var(--danger)">${fn(it.refugo)}</td>
+        <td class="num" style="color:#f5a623">${it.custoTotal>0?fmtBRL(it.custoTotal):'-'}</td>
+      </tr>`;
+    });
+  }
+
+  const countLbl=isMaq?`${(g.maquinas||[]).length} máquina(s)`:`${(g.codigos||[]).length} código(s)`;
+
   return `<div class="grupo-block">
     <div class="grupo-head">
-      <span class="grupo-title">📦 ${escHtml(g.nome)} <span class="grupo-count">${g.codigos.length} código(s)</span></span>
+      <span class="grupo-title">📦 ${escHtml(g.nome)} <span class="grupo-count">${countLbl}</span></span>
       <div style="display:flex;gap:6px">
         <button class="btn btn-ghost btn-sm" onclick="editGrupo('${g.id}')">✎ Editar</button>
         <button class="btn btn-ghost btn-sm" onclick="removeGrupo('${g.id}')" style="color:var(--danger);border-color:var(--danger)">🗑 Remover</button>
@@ -1829,7 +1945,7 @@ function renderGrupoBlock(g,stats){
     </div>
     <div style="overflow-x:auto">
       <table class="grid-table">
-        <thead><tr><th>Código</th><th>Descrição</th><th class="num">Plano</th><th class="num">Realizado</th><th class="num">Aderência</th><th class="num">Refugo</th><th class="num">Custo Refugo</th></tr></thead>
+        <thead><tr>${theadCols}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -1845,7 +1961,7 @@ function renderGrupos(){
   }
   let html='';
   grupos.forEach(g=>{
-    const stats=computeGroupStats(g.codigos);
+    const stats=computeGroupStats(g);
     html+=renderGrupoBlock(g,stats);
   });
   cont.innerHTML=html;
@@ -1867,10 +1983,18 @@ function importGruposJSON(inp){
       if(!Array.isArray(novos))throw new Error('Formato inválido — esperado array de grupos.');
       let count=0;
       novos.forEach(g=>{
-        if(g&&g.nome&&Array.isArray(g.codigos)){
-          const codigos=g.codigos.map(c=>String(c).replace(/\D/g,'').substring(0,7)).filter(c=>c.length>=5);
+        if(!g||!g.nome)return;
+        const tipo=g.tipo==='maquina'?'maquina':'produto';
+        if(tipo==='maquina'){
+          const maquinas=Array.isArray(g.maquinas)?[...new Set(g.maquinas.map(String).map(s=>s.trim()).filter(Boolean))]:[];
+          if(maquinas.length){
+            grupos.push({id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),nome:String(g.nome),tipo,codigos:[],maquinas});
+            count++;
+          }
+        }else{
+          const codigos=Array.isArray(g.codigos)?g.codigos.map(c=>String(c).replace(/\D/g,'').substring(0,7)).filter(c=>c.length>=5):[];
           if(codigos.length){
-            grupos.push({id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),nome:String(g.nome),codigos});
+            grupos.push({id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),nome:String(g.nome),tipo,codigos,maquinas:[]});
             count++;
           }
         }
@@ -1884,8 +2008,12 @@ function importGruposJSON(inp){
 
 function exportGruposCSV(){
   if(!grupos.length){toast('Nenhum grupo para exportar.','err');return;}
-  let c='Grupo,Codigo\n';
-  grupos.forEach(g=>{g.codigos.forEach(cod=>{c+=`"${g.nome.replace(/"/g,'""')}",${cod}\n`;});});
+  let c='Grupo,Tipo,Valor\n';
+  grupos.forEach(g=>{
+    const tipo=g.tipo==='maquina'?'Maquina':'Produto';
+    const valores=g.tipo==='maquina'?(g.maquinas||[]):(g.codigos||[]);
+    valores.forEach(v=>{c+=`"${g.nome.replace(/"/g,'""')}",${tipo},${v}\n`;});
+  });
   dlFile(`grupos_${stamp()}.csv`,c,'text/csv');
   toast('✓ Grupos exportados (CSV).','ok');
 }
@@ -1896,22 +2024,37 @@ function importGruposCSV(inp){
   r.onload=e=>{
     try{
       const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
-      const map={}; // nome -> [codigos] (preserva ordem de primeira aparição)
+      const map={}; // nome -> {tipo, valores:[...]}
       const order=[];
       lines.forEach((l,i)=>{
         if(i===0&&l.toLowerCase().replace(/"/g,'').startsWith('grupo'))return; // pula cabeçalho
-        const m=l.match(/^"([^"]*)"\s*,\s*(.+)$/) || l.match(/^([^,]+),\s*(.+)$/);
-        if(!m)return;
-        const nome=(m[1]||'').trim(),codRaw=(m[2]||'').trim();
-        if(!nome||!codRaw)return;
-        const cod=codRaw.replace(/\D/g,'').substring(0,7);
-        if(cod.length<5)return;
-        if(!map[nome]){map[nome]=[];order.push(nome);}
-        map[nome].push(cod);
+        // Formato novo: "Nome",Tipo,Valor  |  Formato antigo (compat): "Nome",Codigo
+        const m3=l.match(/^"([^"]*)"\s*,\s*([^,]+)\s*,\s*(.+)$/) || l.match(/^([^,]+),\s*([^,]+)\s*,\s*(.+)$/);
+        const m2=l.match(/^"([^"]*)"\s*,\s*(.+)$/) || l.match(/^([^,]+),\s*(.+)$/);
+        let nome,tipo,valor;
+        if(m3){ nome=(m3[1]||'').trim(); tipo=(m3[2]||'').trim().toLowerCase(); valor=(m3[3]||'').trim(); }
+        else if(m2){ nome=(m2[1]||'').trim(); tipo='produto'; valor=(m2[2]||'').trim(); }
+        else return;
+        if(!nome||!valor)return;
+        const isMaq=tipo.startsWith('maq');
+        if(!map[nome]){map[nome]={tipo:isMaq?'maquina':'produto',valores:[]};order.push(nome);}
+        if(isMaq){
+          map[nome].valores.push(valor);
+        }else{
+          const cod=valor.replace(/\D/g,'').substring(0,7);
+          if(cod.length>=5)map[nome].valores.push(cod);
+        }
       });
       let count=0;
       order.forEach(nome=>{
-        grupos.push({id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),nome,codigos:[...new Set(map[nome])]});
+        const{tipo,valores}=map[nome];
+        const vals=[...new Set(valores)];
+        if(!vals.length)return;
+        grupos.push({
+          id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),nome,tipo,
+          codigos:tipo==='produto'?vals:[],
+          maquinas:tipo==='maquina'?vals:[]
+        });
         count++;
       });
       saveGrupos();renderGrupos();
