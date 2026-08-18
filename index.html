@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v13</title>
+<title>Dashboard Programação Diária v13.1</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -167,7 +167,7 @@ canvas{cursor:pointer}
 <body>
 
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v13</span></h1>
+  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v13.1</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
@@ -239,7 +239,7 @@ canvas{cursor:pointer}
         <div class="sep"></div>
         <div class="fg" style="flex:1;min-width:180px">
           <label>🔍 Busca</label>
-          <input type="text" id="fBusca" name="pd-busca-x" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Código, descrição, máquina ou cód. parada (ex: OR01)..." oninput="applyFilters()">
+          <input type="text" id="fBusca" name="pd-busca-x" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Código, descrição, máquina, cód. parada (ex: OR01) ou nome de grupo..." oninput="applyFilters()">
         </div>
       </div>
     </div>
@@ -597,6 +597,7 @@ function applyFilters(){
   // Pré-calcula códigos de parada que batem com a busca (ex: OR01)
   const buscaStops=busca?stopCodes.filter(sc=>sc.code.toLowerCase()===busca||sc.desc.toLowerCase().includes(busca)):[];
   activeBuscaStops=buscaStops; // exposto para os gráficos DownTime
+  const buscaGrupoSet=buscaGrupoCodigos(busca); // códigos cobertos por grupo(s) cujo nome bate com a busca
 
   filteredData=rawData.filter(d=>{
     if(ano&&!d.data.startsWith(ano))return false;
@@ -610,7 +611,8 @@ function applyFilters(){
       const h=`${d.codigo} ${d.descricao} ${d.maquina} ${getMolde(d)}`.toLowerCase();
       const textOk=h.includes(busca);
       const stopOk=buscaStops.length>0&&buscaStops.some(sc=>(d.paradas[sc.code]||0)>0);
-      if(!textOk&&!stopOk)return false;
+      const grupoOk=buscaGrupoSet.has(d.codigo);
+      if(!textOk&&!stopOk&&!grupoOk)return false;
     }
     return true;
   });
@@ -754,6 +756,7 @@ function buildAdhBase({useAno=false,useMes=false}={}){
   const mes=document.getElementById('fMes').value;
   const busca=document.getElementById('fBusca').value.toLowerCase().trim();
   const buscaStops=busca?stopCodes.filter(sc=>sc.code.toLowerCase()===busca||sc.desc.toLowerCase().includes(busca)):[];
+  const buscaGrupoSet=buscaGrupoCodigos(busca);
   return rawData.filter(d=>{
     if(useAno&&ano&&!d.data.startsWith(ano))return false;
     if(useMes&&mes&&+d.data.slice(5,7)!==+mes)return false;
@@ -762,7 +765,8 @@ function buildAdhBase({useAno=false,useMes=false}={}){
       const h=`${d.codigo} ${d.descricao} ${d.maquina} ${getMolde(d)}`.toLowerCase();
       const textOk=h.includes(busca);
       const stopOk=buscaStops.length>0&&buscaStops.some(sc=>(d.paradas[sc.code]||0)>0);
-      if(!textOk&&!stopOk)return false;
+      const grupoOk=buscaGrupoSet.has(d.codigo);
+      if(!textOk&&!stopOk&&!grupoOk)return false;
     }
     return true;
   });
@@ -1674,6 +1678,17 @@ function toggleConfigTab(){
 
 function escHtml(s){
   return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/** Une os códigos de todos os grupos cujo NOME bate com o texto de busca
+ *  (mesma lógica de substring usada nos demais campos de busca). */
+function buscaGrupoCodigos(busca){
+  if(!busca||!grupos.length)return new Set();
+  const set=new Set();
+  grupos.forEach(g=>{
+    if(g.nome.toLowerCase().includes(busca)) g.codigos.forEach(c=>set.add(c));
+  });
+  return set;
 }
 
 function parseCodigosInput(text){
