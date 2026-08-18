@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v12</title>
+<title>Dashboard Programação Diária v12.1</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -163,7 +163,7 @@ canvas{cursor:pointer}
 <body>
 
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v12</span></h1>
+  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v12.1</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
@@ -822,7 +822,7 @@ function renderMonthly(){
           borderWidth:months.map((m,i)=>isSelMonth(m)?2.5:1),
           borderRadius:4,
           datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
-            formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':'—'}},
+            formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':''}},
         {type:'line',label:`Meta ${metaAdh}%`,order:0,
           data:labels.map(()=>metaAdh),
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
@@ -876,7 +876,11 @@ function renderDaily(){
     return;
   }
   empty.style.display='none';canvas.style.display='block';
-  const days=[...new Set(dayData.map(d=>d.data.slice(8,10)))].sort();
+  // Mostra TODOS os dias do mês (não só os com dado) — dias sem dado
+  // ficam sem barra, exibindo apenas a linha de meta naquele ponto.
+  const totalDiasMes=daysInMonth(+y2,+m2);
+  const days=Array.from({length:totalDiasMes},(_,i)=>String(i+1).padStart(2,'0'));
+  const diasComDado=new Set(dayData.map(d=>d.data.slice(8,10)));
   const dlabels=days.map(d=>`${d}/${m2}`);
   const{text,grid}=gCol();
   if(chartDD)chartDD.destroy();
@@ -905,7 +909,7 @@ function renderDaily(){
       else
         Object.values(d.paradas).forEach(v=>{dtmap[day]+=v;});
     });
-    const dtVals=days.map(d=>dtmap[d]||0);
+    const dtVals=days.map(d=>diasComDado.has(d)?(dtmap[d]||0):null);
     const dtColors=days.map((d,i)=>isSelDay(d)?SELECT_BG:adhColorDT(dtVals[i],metaDowntime));
     const dtBorders=days.map((d,i)=>isSelDay(d)?SELECT_BORDER:adhColorDT(dtVals[i],metaDowntime).replace('.82','1').replace('.35','.6'));
     chartDD=new Chart(canvas,{
@@ -916,7 +920,7 @@ function renderDaily(){
           borderWidth:days.map(d=>isSelDay(d)?2.5:1),
           borderRadius:4,
           datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
-            formatter:v=>fn(v)+' min'}},
+            formatter:v=>v!==null?fn(v)+' min':''}},
         {type:'line',label:`Meta ${fn(metaDowntime)} min/dia`,order:0,
           data:dlabels.map(()=>metaDowntime),
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
@@ -934,7 +938,7 @@ function renderDaily(){
           y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
         onClick:onClickDay}
     });
-    document.getElementById('ddCrumb').textContent=`DownTime | ${days.length} dia(s) • clique para filtrar`;
+    document.getElementById('ddCrumb').textContent=`DownTime | ${diasComDado.size} de ${days.length} dia(s) com dado • clique para filtrar`;
   } else {
     // ── MODO ADERÊNCIA (comportamento original) ───────────────────────
     document.getElementById('ddTitle').textContent=`Aderência Diária — ${MES_NOMES[+m2-1]}/${y2}`;
@@ -951,7 +955,7 @@ function renderDaily(){
           borderWidth:days.map(d=>isSelDay(d)?2.5:1),
           borderRadius:4,
           datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
-            formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':'—'}},
+            formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':''}},
         {type:'line',label:`Meta ${metaAdh}%`,order:0,
           data:dlabels.map(()=>metaAdh),
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
@@ -970,7 +974,7 @@ function renderDaily(){
           y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
         onClick:onClickDay}
     });
-    document.getElementById('ddCrumb').textContent=`${days.length} dia(s) com dados • clique para filtrar`;
+    document.getElementById('ddCrumb').textContent=`${diasComDado.size} de ${days.length} dia(s) com dado • clique para filtrar`;
   }
 }
 
