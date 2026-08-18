@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v14</title>
+<title>Dashboard Programação Diária v14.1</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -82,7 +82,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .kpi-card.c-global .kpi-val{color:var(--primary)}.kpi-card.c-acabado .kpi-val{color:var(--success)}
 .kpi-card.c-wip .kpi-val{color:var(--wip)}.kpi-card.c-scrap .kpi-val{color:var(--danger)}
 .kpi-card.c-cost .kpi-val{color:#f5a623}
-.grupo-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px}
+.grupo-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:14px}
 .grupo-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap}
 .grupo-title{font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
 .grupo-count{font-size:10px;font-weight:600;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:10px}
@@ -169,7 +169,7 @@ canvas{cursor:pointer}
 <body>
 
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v14</span></h1>
+  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v14.1</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
@@ -341,9 +341,7 @@ canvas{cursor:pointer}
         <span class="sec-title">📦 Novo Grupo</span>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <label class="btn btn-ghost btn-sm" style="cursor:pointer">⬆ JSON<input type="file" id="grpImportJsonInput" accept=".json" style="display:none" onchange="importGruposJSON(this)"></label>
-          <label class="btn btn-ghost btn-sm" style="cursor:pointer">⬆ CSV<input type="file" id="grpImportCsvInput" accept=".csv" style="display:none" onchange="importGruposCSV(this)"></label>
           <button class="btn btn-ghost btn-sm" onclick="exportGruposJSON()">⬇ JSON</button>
-          <button class="btn btn-ghost btn-sm" onclick="exportGruposCSV()">⬇ CSV</button>
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
@@ -2006,63 +2004,9 @@ function importGruposJSON(inp){
   r.readAsText(file);inp.value='';
 }
 
-function exportGruposCSV(){
-  if(!grupos.length){toast('Nenhum grupo para exportar.','err');return;}
-  let c='Grupo,Tipo,Valor\n';
-  grupos.forEach(g=>{
-    const tipo=g.tipo==='maquina'?'Maquina':'Produto';
-    const valores=g.tipo==='maquina'?(g.maquinas||[]):(g.codigos||[]);
-    valores.forEach(v=>{c+=`"${g.nome.replace(/"/g,'""')}",${tipo},${v}\n`;});
-  });
-  dlFile(`grupos_${stamp()}.csv`,c,'text/csv');
-  toast('✓ Grupos exportados (CSV).','ok');
-}
 
-function importGruposCSV(inp){
-  const file=inp.files[0];if(!file)return;
-  const r=new FileReader();
-  r.onload=e=>{
-    try{
-      const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
-      const map={}; // nome -> {tipo, valores:[...]}
-      const order=[];
-      lines.forEach((l,i)=>{
-        if(i===0&&l.toLowerCase().replace(/"/g,'').startsWith('grupo'))return; // pula cabeçalho
-        // Formato novo: "Nome",Tipo,Valor  |  Formato antigo (compat): "Nome",Codigo
-        const m3=l.match(/^"([^"]*)"\s*,\s*([^,]+)\s*,\s*(.+)$/) || l.match(/^([^,]+),\s*([^,]+)\s*,\s*(.+)$/);
-        const m2=l.match(/^"([^"]*)"\s*,\s*(.+)$/) || l.match(/^([^,]+),\s*(.+)$/);
-        let nome,tipo,valor;
-        if(m3){ nome=(m3[1]||'').trim(); tipo=(m3[2]||'').trim().toLowerCase(); valor=(m3[3]||'').trim(); }
-        else if(m2){ nome=(m2[1]||'').trim(); tipo='produto'; valor=(m2[2]||'').trim(); }
-        else return;
-        if(!nome||!valor)return;
-        const isMaq=tipo.startsWith('maq');
-        if(!map[nome]){map[nome]={tipo:isMaq?'maquina':'produto',valores:[]};order.push(nome);}
-        if(isMaq){
-          map[nome].valores.push(valor);
-        }else{
-          const cod=valor.replace(/\D/g,'').substring(0,7);
-          if(cod.length>=5)map[nome].valores.push(cod);
-        }
-      });
-      let count=0;
-      order.forEach(nome=>{
-        const{tipo,valores}=map[nome];
-        const vals=[...new Set(valores)];
-        if(!vals.length)return;
-        grupos.push({
-          id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),nome,tipo,
-          codigos:tipo==='produto'?vals:[],
-          maquinas:tipo==='maquina'?vals:[]
-        });
-        count++;
-      });
-      saveGrupos();renderGrupos();
-      toast(`✓ ${count} grupo(s) importado(s) do CSV.`,'ok');
-    }catch(err){toast('Erro ao importar CSV: '+err.message,'err');}
-  };
-  r.readAsText(file);inp.value='';
-}
+
+
 
 /* ═══════════════ UTILITIES ══════════════════════════════════ */
 function toISO(v){if(!v)return'1970-01-01';if(v instanceof Date)return v.toISOString().slice(0,10);const s=v.toString().trim();if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);if(/^\d{2}\/\d{2}\/\d{4}/.test(s)){const[d,m,y]=s.split('/');return`${y}-${m}-${d}`;}if(/^\d{2}\/\d{2}\/\d{2}$/.test(s)){const[d,m,y]=s.split('/');return`20${y}-${m}-${d}`;}return s;}
