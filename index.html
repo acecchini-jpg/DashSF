@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v14.1</title>
+<title>Dashboard Programação Diária v15</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -169,7 +169,7 @@ canvas{cursor:pointer}
 <body>
 
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v14.1</span></h1>
+  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v15</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
@@ -460,6 +460,19 @@ canvas{cursor:pointer}
         </table>
       </div>
       <p style="font-size:10px;color:var(--muted)">O link é feito pelos 7 dígitos iniciais do Código Acabado. Usado para agrupamento por Molde nos gráficos.</p>
+    </div>
+
+    <!-- QUALIDADE DE DADOS: MÁQUINAS -->
+    <div class="section-card">
+      <div class="sec-head">
+        <span class="sec-title">🔍 Qualidade de Dados — Máquinas</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="analisarQualidadeMaquinas()">🔎 Analisar</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportQualidadeCSV()">⬇ CSV</button>
+        </div>
+      </div>
+      <p style="font-size:10px;color:var(--muted);margin-bottom:10px">Roda sobre os dados já carregados (todo o histórico, sem filtro). Aponta possíveis erros de digitação na coluna Máquina do Plano Diário — a decisão de corrigir na fonte ou ignorar é sua.</p>
+      <div id="qualidadeMaqResult"><div class="chart-empty" style="padding:20px 0"><span class="ei">🔍</span><span>Clique em Analisar</span></div></div>
     </div>
 
     <!-- BACKUP -->
@@ -1680,6 +1693,110 @@ function toggleConfigTab(){
     }
   }
   toast(isHidden?'⚙️ Aba Configurações visível':'⚙️ Aba Configurações oculta','ok');
+}
+
+/* ═══════════════ QUALIDADE DE DADOS: MÁQUINAS ═════════════════
+   Roda sobre `rawData` (todo o histórico carregado, sem filtro).
+   Duas análises, ambas informativas — nenhuma altera dado nenhum:
+   1) Duplicatas por grafia: mesmo valor após normalizar (minúsculo
+      + sem espaços) aparecendo com escritas diferentes — ex.:
+      "Inj 02" / "inj02" / "INJ02" são hoje 3 máquinas distintas
+      pro sistema, quando deveriam ser 1.
+   2) Valores suspeitos: baixa frequência / só números / sem letra —
+      sinalizados com tags, mas listados junto com a contagem real,
+      para o usuário decidir (não filtra nada automaticamente). ═══ */
+let _qualidadeMaqReport=null; // cache do último relatório, para exportar
+
+function analisarQualidadeMaquinas(){
+  if(!rawData.length){toast('Nenhum dado carregado ainda.','err');return;}
+  const porValor={}; // maquina_raw -> {count, dates:Set}
+  rawData.forEach(d=>{
+    const m=(d.maquina||'').trim();
+    if(!m)return; // ignora linhas sem máquina preenchida
+    if(!porValor[m])porValor[m]={count:0,dates:new Set()};
+    porValor[m].count++;
+    porValor[m].dates.add(d.data);
+  });
+
+  // 1) Clusters por normalização (minúsculo + sem espaços)
+  const normKey=s=>s.toLowerCase().replace(/\s+/g,'');
+  const clusters={};
+  Object.keys(porValor).forEach(m=>{
+    const k=normKey(m);
+    if(!clusters[k])clusters[k]=[];
+    clusters[k].push(m);
+  });
+  const duplicatas=Object.values(clusters)
+    .filter(vals=>vals.length>1)
+    .map(vals=>vals.map(v=>({valor:v,count:porValor[v].count,dates:[...porValor[v].dates].sort()})))
+    .sort((a,b)=>b.reduce((s,x)=>s+x.count,0)-a.reduce((s,x)=>s+x.count,0));
+
+  // 2) Valores suspeitos (tags informativas, sem filtrar nada)
+  const suspeitos=Object.entries(porValor).map(([m,info])=>{
+    const tags=[];
+    if(/^\d+$/.test(m))tags.push('🔢 Só números');
+    if(!/[a-zA-Zà-úÀ-Ú]/.test(m))tags.push('🔤 Sem letras');
+    if(m.length<=2)tags.push('📏 Muito curto');
+    if(info.count<=3)tags.push('📉 Baixa frequência');
+    return{valor:m,count:info.count,dates:[...info.dates].sort(),tags};
+  }).filter(x=>x.tags.length>0).sort((a,b)=>a.count-b.count);
+
+  _qualidadeMaqReport={duplicatas,suspeitos,totalMaquinas:Object.keys(porValor).length};
+  renderQualidadeMaquinas();
+  toast(`✓ Análise concluída: ${duplicatas.length} cluster(es) de duplicata, ${suspeitos.length} valor(es) suspeito(s).`,'ok');
+}
+
+function renderQualidadeMaquinas(){
+  const cont=document.getElementById('qualidadeMaqResult');
+  if(!cont||!_qualidadeMaqReport)return;
+  const{duplicatas,suspeitos,totalMaquinas}=_qualidadeMaqReport;
+  const fmtDates=arr=>arr.length<=8?arr.map(brDate).join(', '):arr.slice(0,8).map(brDate).join(', ')+` (+${arr.length-8})`;
+
+  let html=`<p style="font-size:11px;color:var(--muted);margin-bottom:12px">${totalMaquinas} valor(es) distinto(s) de máquina no total.</p>`;
+
+  html+=`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">Duplicatas por grafia (maiúscula/minúscula, espaços) — ${duplicatas.length}</div>`;
+  if(!duplicatas.length){
+    html+='<p style="font-size:11px;color:var(--muted)">Nenhuma encontrada.</p>';
+  }else{
+    html+='<table class="grid-table"><thead><tr><th>Grafias diferentes p/ a mesma máquina</th><th class="num">Registros</th><th>Dias em que aparece</th></tr></thead><tbody>';
+    duplicatas.forEach(cluster=>{
+      cluster.forEach((v,i)=>{
+        html+=`<tr><td>${i===0?'<strong>➜</strong> ':'&nbsp;&nbsp;'}"${escHtml(v.valor)}"</td><td class="num">${fn(v.count)}</td><td style="font-size:10px;color:var(--muted)">${fmtDates(v.dates)}</td></tr>`;
+      });
+    });
+    html+='</tbody></table>';
+  }
+  html+='</div>';
+
+  html+=`<div><div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">Valores possivelmente inválidos — ${suspeitos.length}</div>`;
+  if(!suspeitos.length){
+    html+='<p style="font-size:11px;color:var(--muted)">Nenhum encontrado.</p>';
+  }else{
+    html+='<table class="grid-table"><thead><tr><th>Valor</th><th class="num">Registros</th><th>Motivo(s)</th><th>Dias em que aparece</th></tr></thead><tbody>';
+    suspeitos.forEach(s=>{
+      html+=`<tr><td style="color:var(--warning)">"${escHtml(s.valor)}"</td><td class="num">${fn(s.count)}</td><td style="font-size:10px">${s.tags.join(' ')}</td><td style="font-size:10px;color:var(--muted)">${fmtDates(s.dates)}</td></tr>`;
+    });
+    html+='</tbody></table>';
+  }
+  html+='</div>';
+
+  cont.innerHTML=html;
+}
+
+function exportQualidadeCSV(){
+  if(!_qualidadeMaqReport){toast('Rode a análise primeiro (botão Analisar).','err');return;}
+  const{duplicatas,suspeitos}=_qualidadeMaqReport;
+  let c='Categoria,Valor,Registros,MotivoOuGrupo,Dias\n';
+  duplicatas.forEach((cluster,i)=>{
+    cluster.forEach(v=>{
+      c+=`Duplicata,"${v.valor}",${v.count},cluster${i+1},"${v.dates.join('; ')}"\n`;
+    });
+  });
+  suspeitos.forEach(s=>{
+    c+=`Suspeito,"${s.valor}",${s.count},"${s.tags.join(' ').replace(/"/g,'')}","${s.dates.join('; ')}"\n`;
+  });
+  dlFile(`qualidade_maquinas_${stamp()}.csv`,c,'text/csv');
+  toast('✓ Relatório exportado (CSV).','ok');
 }
 
 /* ═══════════════ GRUPOS DE PRODUTOS (favoritos locais) ═══════
