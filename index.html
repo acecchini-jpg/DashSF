@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v16</title>
+<title>Dash Plano Diário (SF) v16.1</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -161,6 +161,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 /* TOAST */
 .toast{position:fixed;bottom:18px;right:18px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 16px;border-radius:var(--radius);font-size:12px;font-weight:600;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;z-index:9999;max-width:300px}
 .toast.show{opacity:1;transform:translateY(0)}.toast.ok{border-left:4px solid var(--success)}.toast.err{border-left:4px solid var(--danger)}.toast.warn{border-left:4px solid var(--warning)}
+.loading-spin{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--primary);border-radius:50%;animation:loadspin .8s linear infinite}
+@keyframes loadspin{to{transform:rotate(360deg)}}
 
 canvas{cursor:pointer}
 @media(max-width:900px){.kpi-grid{grid-template-columns:1fr 1fr}.charts-row{grid-template-columns:1fr !important}.bk-grid{grid-template-columns:1fr}}
@@ -190,9 +192,15 @@ canvas{cursor:pointer}
   </form>
 </div>
 
+<!-- ══ LOADING SCREEN ══ -->
+<div id="loadingScreen" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.92);align-items:center;justify-content:center;flex-direction:column;gap:14px">
+  <div class="loading-spin"></div>
+  <span id="loadingMsg" style="color:#e2e8f0;font-size:13px;font-weight:600">Carregando...</span>
+</div>
+
 
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v16</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v16.1</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -1465,6 +1473,7 @@ async function loadPersisted(){
   // ── FONTE: NUVEM ────────────────────────────────────────────────
   if(Supa.active&&Supa.cfgOk()){
     try{
+      showLoadingScreen('☁ Carregando dados da nuvem...');
       setMainSt('loading','☁ Carregando dados da nuvem...');
       const{regs,scs,dps,cfg,costsArr}=await Supa.loadAll();
       rawData=regs;stopCodes=scs;depara=dps;renderDp();
@@ -1705,7 +1714,9 @@ async function supaToggle(){
     supaSetActive(false);
     supaStatus('','Nuvem desativada.');
     toast('Nuvem desativada. Recarregando dados locais...','ok');
+    showLoadingScreen('Recarregando dados locais...');
     await loadPersisted();loadDp();renderKPIs();
+    hideLoadingScreen();
   }else{
     if(!Supa.cfgOk()){toast('Configure e teste a conexão primeiro.','err');return;}
     Auth.init();
@@ -1721,7 +1732,9 @@ async function supaToggle(){
     supaSetActive(true);
     updateAuthUI();
     toast('☁ Nuvem ativada. Carregando dados da nuvem...','ok');
+    showLoadingScreen('☁ Carregando dados da nuvem...');
     await loadPersisted();
+    hideLoadingScreen();
   }
   updateCloudUI();
 }
@@ -1754,6 +1767,15 @@ function supaStatus(cls,msg){
   const el=document.getElementById('supaStatus');
   if(el){el.textContent=msg;el.style.color=cls==='ok'?'var(--success)':cls==='err'?'var(--danger)':'var(--muted)';}
 }
+function showLoadingScreen(msg){
+  const ov=document.getElementById('loadingScreen');
+  if(ov){ov.style.display='flex';const m=document.getElementById('loadingMsg');if(m)m.textContent=msg||'Carregando...';}
+}
+function hideLoadingScreen(){
+  const ov=document.getElementById('loadingScreen');
+  if(ov)ov.style.display='none';
+}
+
 function showLoginOverlay(){
   const ov=document.getElementById('loginOverlay');
   if(ov){ov.style.display='flex';document.getElementById('loginEmail')?.focus();}
@@ -1782,7 +1804,9 @@ async function handleLoginSubmit(evt){
     await Auth.signIn(email,pass);
     hideLoginOverlay();
     updateAuthUI();
+    showLoadingScreen('Carregando dados...');
     await bootData();
+    hideLoadingScreen();
     toast('✓ Login realizado.','ok');
   }catch(e){
     errEl.textContent='Falha no login: '+(e.message||'verifique e-mail/senha.');
@@ -2316,6 +2340,7 @@ async function bootData(){
 }
 
 (async function init(){
+  showLoadingScreen('Iniciando...');
   const th=localStorage.getItem('pdTheme');
   if(th){document.documentElement.setAttribute('data-theme',th);document.getElementById('themeBtn').textContent=th==='light'?'☀️ Claro':'🌙 Escuro';}
   const sm=localStorage.getItem('pd_meta');
@@ -2335,9 +2360,11 @@ async function bootData(){
   // 2) Portão de autenticação — só exigido quando a nuvem está ativa e
   //    configurada (a tabela scrapiq_store agora exige usuário logado).
   if(Supa.active&&Supa.cfgOk()){
+    showLoadingScreen('Verificando sessão...');
     Auth.init();
     const session=await Auth.getSession();
     if(!session){
+      hideLoadingScreen();
       showLoginOverlay();
       return; // bootData() roda depois, dentro de handleLoginSubmit()
     }
@@ -2345,7 +2372,9 @@ async function bootData(){
   }
 
   // 3) Carrega dados da fonte ativa (nuvem ou local)
+  showLoadingScreen('Carregando dados...');
   await bootData();
+  hideLoadingScreen();
 })();
 </script>
 </body>
