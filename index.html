@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Programação Diária v15</title>
+<title>Dashboard Programação Diária v16</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{
   --bg:#0f172a;--surface:#1e293b;--surface2:#293548;
@@ -168,10 +169,34 @@ canvas{cursor:pointer}
 </head>
 <body>
 
+<!-- ══ LOGIN (Supabase Auth) ══ -->
+<div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.92);backdrop-filter:blur(2px);align-items:center;justify-content:center;padding:20px">
+  <form id="loginForm" onsubmit="handleLoginSubmit(event)" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+    <h2 style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:4px">📊 Dash SF</h2>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:18px">Entre com sua conta para acessar os dados (mesma conta do Scrap IQ).</p>
+    <div class="fg" style="margin-bottom:10px">
+      <label>E-mail</label>
+      <input type="email" id="loginEmail" required autocomplete="username" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:13px;outline:none;width:100%">
+    </div>
+    <div class="fg" style="margin-bottom:14px">
+      <label>Senha</label>
+      <input type="password" id="loginPassword" required autocomplete="current-password" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:13px;outline:none;width:100%">
+    </div>
+    <div id="loginError" style="display:none;font-size:11px;color:var(--danger);margin-bottom:10px;padding:8px;background:rgba(239,68,68,.1);border-radius:6px"></div>
+    <button type="submit" class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center">Entrar</button>
+    <div style="text-align:center;margin-top:12px">
+      <a href="#" onclick="hideLoginOverlay();return false;" style="font-size:11px;color:var(--muted)">Cancelar (usar sem nuvem)</a>
+    </div>
+  </form>
+</div>
+
+
 <header class="app-header">
-  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v15</span></h1>
+  <h1>📊 Dashboard Programação Diária <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v16</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
+  <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
+  <button class="theme-btn" id="logoutBtn" style="display:none" onclick="doLogout()">⏻ Sair</button>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
     Analyser
@@ -1486,19 +1511,72 @@ async function loadPersisted(){
 }
 
 /* ═══════════════ SUPABASE — REST PostgREST puro ═══════════════
-   Sem SDK. Tabela: pd_store (store, key, doc jsonb, PK(store,key)).
+   Tabela: scrapiq_store (store, key, doc jsonb, PK(store,key)).
    Modo híbrido: Supa.active → nuvem; senão → IndexedDB/localStorage.
    Stores: registros | stopcodes | depara | config
    ════════════════════════════════════════════════════════════════ */
 function djb2(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return(h>>>0).toString(36);}
 const dpKey =r=>djb2(`${r.codAcabado||''}|${r.codWip||''}|${r.molde||''}|${r.descricao||''}`);
 
+/* ═══════════════ AUTH — Supabase Auth SDK ═════════════════════
+   A tabela scrapiq_store agora exige usuário autenticado (RLS).
+   Contas criadas manualmente no painel do Supabase — mesmas do
+   Scrap IQ (mesmo projeto). Só usado para obter o access_token que
+   o módulo Supa (REST puro) envia como Bearer. ═══════════════════ */
+const Auth = {
+  client: null,
+  session: null,
+
+  init() {
+    if (this.client) return this.client;
+    if (!Supa.url || !Supa.key) return null;
+    if (!window.supabase || !window.supabase.createClient) {
+      console.error('Auth.init: SDK do Supabase não carregou.');
+      return null;
+    }
+    this.client = window.supabase.createClient(Supa.url, Supa.key, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
+    this.client.auth.onAuthStateChange((_event, session) => { this.session = session; });
+    return this.client;
+  },
+
+  async getSession() {
+    if (!this.client) this.init();
+    if (!this.client) return null;
+    const { data, error } = await this.client.auth.getSession();
+    if (error) { console.error('Auth.getSession:', error); return null; }
+    this.session = data.session;
+    return this.session;
+  },
+
+  async signIn(email, password) {
+    if (!this.client) this.init();
+    if (!this.client) throw new Error('Supabase não configurado.');
+    const { data, error } = await this.client.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    this.session = data.session;
+    return data.session;
+  },
+
+  async signOut() {
+    if (this.client) { try { await this.client.auth.signOut(); } catch(e) {} }
+    this.session = null;
+  },
+
+  get accessToken() { return this.session?.access_token || null; },
+  get userEmail() { return this.session?.user?.email || null; }
+};
+
 const Supa={
   url:'',key:'',active:false,fromConfigJson:false,
 
   // Sanitiza URL colada: remove barras finais e /rest/v1 (evita 404 PGRST125)
   sanitize(u){return(u||'').trim().replace(/\/+$/,'').replace(/\/rest\/v1$/,'').replace(/\/+$/,'');},
-  hdr(extra){return Object.assign({'apikey':this.key,'Authorization':'Bearer '+this.key,'Content-Type':'application/json'},extra||{});},
+  hdr(extra){
+    const token=(typeof Auth!=='undefined'&&Auth.accessToken)?Auth.accessToken:this.key;
+    return Object.assign({'apikey':this.key,'Authorization':'Bearer '+token,'Content-Type':'application/json'},extra||{});
+  },
   ep(q){return this.url+'/rest/v1/scrapiq_store'+(q||'');},
   cfgOk(){return !!(this.url&&this.key);},
 
@@ -1525,39 +1603,57 @@ const Supa={
     return rows.length;
   },
 
-  // Leitura paginada 1000/página: 1ª com count=exact, demais em paralelo (conc. 6)
+  // Leitura paginada — descobre o tamanho REAL de página pela 1ª resposta
+  // (o PostgREST pode limitar abaixo do `limit` pedido via db-max-rows) e usa
+  // esse valor confirmado para os offsets seguintes. Para só quando uma
+  // página vier mais curta que o tamanho confirmado — nunca assume páginas
+  // cheias por antecipação (isso pulava dados silenciosamente).
   async getAll(store){
-    const page=1000;
-    const first=await fetch(this.ep(`?store=eq.${store}&select=doc&order=key.asc&limit=${page}&offset=0`),
-      {headers:this.hdr({'Prefer':'count=exact'})});
-    if(!first.ok)throw new Error('Leitura '+store+': HTTP '+first.status);
-    const total=parseInt((first.headers.get('content-range')||'0/0').split('/')[1])||0;
-    const docs=(await first.json()).map(r=>r.doc);
-    const offs=[];for(let o=page;o<total;o+=page)offs.push(o);
-    for(let i=0;i<offs.length;i+=6){
-      const batch=await Promise.all(offs.slice(i,i+6).map(o=>
-        fetch(this.ep(`?store=eq.${store}&select=doc&order=key.asc&limit=${page}&offset=${o}`),{headers:this.hdr()})
-          .then(r=>{if(!r.ok)throw new Error('Página '+store+': HTTP '+r.status);return r.json();})
-      ));
-      batch.forEach(js=>docs.push(...js.map(r=>r.doc)));
+    const REQUEST=1000, CONC=2;
+    const fetchPage=async(o)=>{
+      const r=await fetch(this.ep(`?store=eq.${store}&select=doc&order=key.asc&limit=${REQUEST}&offset=${o}`),{headers:this.hdr()});
+      if(!r.ok)throw new Error('Leitura '+store+': HTTP '+r.status);
+      return(await r.json()).map(x=>x.doc);
+    };
+    const docs=[];
+    const first=await fetchPage(0);
+    docs.push(...first);
+    if(!first.length)return docs;
+    const PAGE=first.length; // tamanho real confirmado pelo servidor
+    let from=PAGE;
+    while(true){
+      const reqs=[];for(let i=0;i<CONC;i++)reqs.push(fetchPage(from+i*PAGE));
+      const batches=await Promise.all(reqs);
+      let stop=false;
+      for(const b of batches){docs.push(...b);if(b.length<PAGE){stop=true;break;}}
+      if(stop)break;
+      from+=CONC*PAGE;
     }
     return docs;
   },
 
-  // Dedup de importação: baixa SÓ as chaves (select=key), paginado
+  // Dedup de importação: baixa SÓ as chaves (select=key). Mesma correção
+  // de paginação do getAll() — tamanho real confirmado, sem count=exact.
   async getKeys(store){
-    const page=1000;
-    const first=await fetch(this.ep(`?store=eq.${store}&select=key&order=key.asc&limit=${page}&offset=0`),
-      {headers:this.hdr({'Prefer':'count=exact'})});
-    if(!first.ok)throw new Error('Chaves '+store+': HTTP '+first.status);
-    const total=parseInt((first.headers.get('content-range')||'0/0').split('/')[1])||0;
-    const keys=(await first.json()).map(r=>r.key);
-    const offs=[];for(let o=page;o<total;o+=page)offs.push(o);
-    for(let i=0;i<offs.length;i+=6){
-      const batch=await Promise.all(offs.slice(i,i+6).map(o=>
-        fetch(this.ep(`?store=eq.${store}&select=key&order=key.asc&limit=${page}&offset=${o}`),{headers:this.hdr()}).then(r=>r.json())
-      ));
-      batch.forEach(js=>keys.push(...js.map(r=>r.key)));
+    const REQUEST=1000, CONC=2;
+    const fetchPage=async(o)=>{
+      const r=await fetch(this.ep(`?store=eq.${store}&select=key&order=key.asc&limit=${REQUEST}&offset=${o}`),{headers:this.hdr()});
+      if(!r.ok)throw new Error('Chaves '+store+': HTTP '+r.status);
+      return(await r.json()).map(x=>x.key);
+    };
+    const keys=[];
+    const first=await fetchPage(0);
+    keys.push(...first);
+    if(!first.length)return new Set(keys);
+    const PAGE=first.length;
+    let from=PAGE;
+    while(true){
+      const reqs=[];for(let i=0;i<CONC;i++)reqs.push(fetchPage(from+i*PAGE));
+      const batches=await Promise.all(reqs);
+      let stop=false;
+      for(const b of batches){keys.push(...b);if(b.length<PAGE){stop=true;break;}}
+      if(stop)break;
+      from+=CONC*PAGE;
     }
     return new Set(keys);
   },
@@ -1598,9 +1694,10 @@ async function supaSaveTest(){
   document.getElementById('supaUrl').value=Supa.url;
   if(!Supa.cfgOk()){toast('Preencha URL e chave.','err');return;}
   supaPersistLocalCfg();
+  Auth.client=null;Auth.session=null; // credenciais podem ter mudado — reconstrói o cliente de auth
   supaStatus('','Testando conexão...');
-  try{await Supa.test();supaStatus('ok','✓ Conexão OK — tabela pd_store acessível');toast('✓ Conexão OK.','ok');}
-  catch(e){supaStatus('err','Falha: '+e.message);toast('Falha: '+e.message,'err');}
+  try{await Supa.test();supaStatus('ok','✓ Conexão OK — tabela scrapiq_store acessível');toast('✓ Conexão OK.','ok');}
+  catch(e){supaStatus('err','Falha: '+e.message+' (se a tabela exige login, use Ativar Nuvem para autenticar)');toast('Falha: '+e.message,'err');}
 }
 
 async function supaToggle(){
@@ -1611,10 +1708,18 @@ async function supaToggle(){
     await loadPersisted();loadDp();renderKPIs();
   }else{
     if(!Supa.cfgOk()){toast('Configure e teste a conexão primeiro.','err');return;}
+    Auth.init();
+    const session=await Auth.getSession();
+    if(!session){
+      toast('Faça login para ativar a nuvem.','err');
+      showLoginOverlay();
+      return;
+    }
     supaStatus('','Validando conexão...');
     try{await Supa.test();}
     catch(e){supaStatus('err','Falha: '+e.message);toast('Não ativado: '+e.message,'err');return;}
     supaSetActive(true);
+    updateAuthUI();
     toast('☁ Nuvem ativada. Carregando dados da nuvem...','ok');
     await loadPersisted();
   }
@@ -1649,6 +1754,50 @@ function supaStatus(cls,msg){
   const el=document.getElementById('supaStatus');
   if(el){el.textContent=msg;el.style.color=cls==='ok'?'var(--success)':cls==='err'?'var(--danger)':'var(--muted)';}
 }
+function showLoginOverlay(){
+  const ov=document.getElementById('loginOverlay');
+  if(ov){ov.style.display='flex';document.getElementById('loginEmail')?.focus();}
+}
+function hideLoginOverlay(){
+  const ov=document.getElementById('loginOverlay');
+  if(ov)ov.style.display='none';
+}
+function updateAuthUI(){
+  const logoutBtn=document.getElementById('logoutBtn');
+  const emailBadge=document.getElementById('userEmailBadge');
+  const logged=!!Auth.session;
+  if(logoutBtn)logoutBtn.style.display=logged?'inline-flex':'none';
+  if(emailBadge){emailBadge.style.display=logged?'':'none';emailBadge.textContent=logged?Auth.userEmail:'';}
+}
+
+async function handleLoginSubmit(evt){
+  evt.preventDefault();
+  const email=document.getElementById('loginEmail').value.trim();
+  const pass=document.getElementById('loginPassword').value;
+  const errEl=document.getElementById('loginError');
+  const btn=document.getElementById('loginBtn');
+  errEl.style.display='none';
+  btn.disabled=true;btn.textContent='Entrando...';
+  try{
+    await Auth.signIn(email,pass);
+    hideLoginOverlay();
+    updateAuthUI();
+    await bootData();
+    toast('✓ Login realizado.','ok');
+  }catch(e){
+    errEl.textContent='Falha no login: '+(e.message||'verifique e-mail/senha.');
+    errEl.style.display='block';
+  }finally{
+    btn.disabled=false;btn.textContent='Entrar';
+  }
+}
+
+async function doLogout(){
+  if(!confirm('Sair da sessão?'))return;
+  await Auth.signOut();
+  location.reload();
+}
+
 function updateCloudUI(){
   const b=document.getElementById('supaModeBadge');
   if(b){b.textContent=Supa.active?'☁ NUVEM':'LOCAL';
@@ -2154,6 +2303,18 @@ function setBadge(){document.getElementById('recBadge').textContent=rawData.leng
 function toast(msg,type=''){const el=document.getElementById('toast');el.textContent=msg;el.className=`toast show ${type}`;setTimeout(()=>el.className='toast',3200);}
 
 /* ═══════════════ INIT ════════════════════════════════════════ */
+/** Carrega os dados (nuvem ou local) e finaliza o boot da tela.
+ *  Extraído do init() para poder ser chamado de novo após o login. */
+async function bootData(){
+  await loadPersisted();
+  loadDp(); // no-op se nuvem ativa (depara já veio de loadPersisted nesse caso)
+  if(rawData.length){
+    renderKPIs();
+    applyDefaultMonthFilter(); // mês atual + motivo principal do Pareto pré-selecionados
+  }
+  renderGrupos(); // não depende de rawData: mostra os grupos (ou o estado vazio) desde já
+}
+
 (async function init(){
   const th=localStorage.getItem('pdTheme');
   if(th){document.documentElement.setAttribute('data-theme',th);document.getElementById('themeBtn').textContent=th==='light'?'☀️ Claro':'🌙 Escuro';}
@@ -2170,14 +2331,21 @@ function toast(msg,type=''){const el=document.getElementById('toast');el.textCon
   if(su)su.value=Supa.url||'';
   if(sk)sk.value=Supa.key||'';
   updateCloudUI();
-  // 2) Carrega dados da fonte ativa (nuvem ou local)
-  await loadPersisted();
-  loadDp(); // no-op se nuvem ativa (depara já veio de loadPersisted nesse caso)
-  if(rawData.length){
-    renderKPIs();
-    applyDefaultMonthFilter(); // mês atual + motivo principal do Pareto pré-selecionados
+
+  // 2) Portão de autenticação — só exigido quando a nuvem está ativa e
+  //    configurada (a tabela scrapiq_store agora exige usuário logado).
+  if(Supa.active&&Supa.cfgOk()){
+    Auth.init();
+    const session=await Auth.getSession();
+    if(!session){
+      showLoginOverlay();
+      return; // bootData() roda depois, dentro de handleLoginSubmit()
+    }
+    updateAuthUI();
   }
-  renderGrupos(); // não depende de rawData: mostra os grupos (ou o estado vazio) desde já
+
+  // 3) Carrega dados da fonte ativa (nuvem ou local)
+  await bootData();
 })();
 </script>
 </body>
