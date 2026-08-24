@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v16.1</title>
+<title>Dash Plano Diário (SF) v17</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -60,6 +60,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 /* TURNO TOGGLE */
 .tgl-grp{display:flex;gap:3px}
 .tgl-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;min-width:40px;text-align:center;user-select:none}
+.tgl-btn.on{background:var(--primary);border-color:var(--primary);color:#fff}
 .tgl-btn:hover{border-color:var(--text);color:var(--text)}
 .tgl-btn[data-t="1T"].on{background:var(--t1);border-color:var(--t1);color:#fff;box-shadow:0 0 0 2px rgba(59,130,246,.3)}
 .tgl-btn[data-t="2T"].on{background:var(--t2);border-color:var(--t2);color:#fff;box-shadow:0 0 0 2px rgba(16,185,129,.3)}
@@ -200,7 +201,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v16.1</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -299,6 +300,10 @@ canvas{cursor:pointer}
       <div class="chart-card">
         <div class="chart-head">
           <span class="chart-title">Aderência Mês a Mês</span>
+          <div class="tgl-grp">
+            <button class="tgl-btn on" id="tglMMMes" onclick="toggleMMMode('mes')" style="padding:3px 10px;font-size:10px;min-width:auto">Mês</button>
+            <button class="tgl-btn" id="tglMMSemana" onclick="toggleMMMode('semana')" style="padding:3px 10px;font-size:10px;min-width:auto">Semana</button>
+          </div>
           <span class="chart-crumb" id="mmCrumb"></span>
         </div>
         <div class="chart-wrap">
@@ -559,6 +564,7 @@ let custoMap     = {};   // codigo -> {descricao, unitCost} (índice rápido, re
 let filteredData = [];
 let activeTurnos = new Set(['1T','2T','3T']);
 let selStop      = null;
+let mmMode       = 'mes'; // 'mes' | 'semana' — modo do gráfico Aderência Mês a Mês
 let lastParetoTop= null; // {code,min,total} do motivo com mais minutos no Pareto atual
 let commState    = { stopCode:null, drillKey:null, grp:null };
 let commHidden   = false;
@@ -631,7 +637,11 @@ function toggleTurno(evt,t){
 /* ═══════════════ FILTERS ════════════════════════════════════ */
 function populateFilterOpts(){
   const anos=[...new Set(rawData.map(d=>d.data.slice(0,4)))].sort();
-  const semanas=[...new Set(rawData.map(d=>d.semana))].sort();
+  // Ordena semanas pela menor data de cada uma (nunca pela string — "WK52/26"
+  // viria depois de "WK01/27" na ordenação alfabética, o que é cronologicamente errado)
+  const semMinData={};
+  rawData.forEach(d=>{if(!semMinData[d.semana]||d.data<semMinData[d.semana])semMinData[d.semana]=d.data;});
+  const semanas=Object.keys(semMinData).sort((a,b)=>semMinData[a].localeCompare(semMinData[b]));
   const dias=[...new Set(rawData.map(d=>d.data))].sort();
   fillSel('fAno',anos.map(v=>({v,l:v})));
   fillSel('fSemana',semanas.map(v=>({v,l:v})));
@@ -832,6 +842,7 @@ function buildAdhBase({useAno=false,useMes=false}={}){
 }
 
 function renderMonthly(){
+  if(mmMode==='semana'){renderMonthlyAsWeekly();return;}
   const tipo=document.getElementById('fTipo').value;
   const avaliar=document.getElementById('fAvaliar').value;
   // Só responde ao filtro de Ano (ignora Mês/Semana/Dia/Período)
@@ -862,8 +873,9 @@ function renderMonthly(){
     return true;
   };
 
-  // ── onClick compartilhado ──────────────────────────────────────────
+  // ── onClick compartilhado (Shift+clique alterna p/ visão semanal) ──
   const onClickMonth=(evt,els)=>{
+    if(evt.native&&evt.native.shiftKey){toggleMMMode();return;}
     if(!els.length||els[0].datasetIndex!==0)return;
     const mk=months[els[0].index];const[y,mo]=mk.split('-');
     const fAnoEl=document.getElementById('fAno');
@@ -917,7 +929,7 @@ function renderMonthly(){
           y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
         onClick:onClickMonth}
     });
-    document.getElementById('mmCrumb').textContent=`DownTime | ${months.length} mês(es) • clique para filtrar`;
+    document.getElementById('mmCrumb').textContent=`DownTime | ${months.length} mês(es) • clique filtra • shift+clique = semana`;
   } else {
     // ── MODO ADERÊNCIA (comportamento original) ───────────────────────
     const mmap={};
@@ -952,7 +964,139 @@ function renderMonthly(){
           y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
         onClick:onClickMonth}
     });
-    document.getElementById('mmCrumb').textContent=`${tipo} | ${months.length} mês(es) • clique para filtrar`;
+    document.getElementById('mmCrumb').textContent=`${tipo} | ${months.length} mês(es) • clique filtra • shift+clique = semana`;
+  }
+}
+
+function toggleMMMode(mode){
+  mmMode = mode || (mmMode==='mes' ? 'semana' : 'mes');
+  const bMes=document.getElementById('tglMMMes'), bSem=document.getElementById('tglMMSemana');
+  if(bMes)bMes.classList.toggle('on', mmMode==='mes');
+  if(bSem)bSem.classList.toggle('on', mmMode==='semana');
+  renderMonthly();
+}
+
+/** Espelha renderMonthly(), agrupando por semana ISO (d.semana, formato
+ *  "WK34/26") em vez de por mês. Ordena pela menor data de cada semana
+ *  (nunca por string — "WK52/26" viria depois de "WK01/27" na ordenação
+ *  alfabética, o que estaria errado cronologicamente). */
+function renderMonthlyAsWeekly(){
+  const tipo=document.getElementById('fTipo').value;
+  const avaliar=document.getElementById('fAvaliar').value;
+  const base=typeFilter(buildAdhBase({useAno:true}),tipo);
+
+  const weekInfo={}; // wk -> {minData, year}
+  base.forEach(d=>{
+    const wk=d.semana;
+    if(!weekInfo[wk]||d.data<weekInfo[wk].minData){
+      weekInfo[wk]={minData:d.data,year:+d.data.slice(0,4)};
+    }
+  });
+  const weeks=Object.keys(weekInfo).sort((a,b)=>weekInfo[a].minData.localeCompare(weekInfo[b].minData));
+
+  const empty=document.getElementById('mmEmpty'),canvas=document.getElementById('cMM');
+  if(!weeks.length){
+    empty.style.display='flex';canvas.style.display='none';
+    if(chartMM){chartMM.destroy();chartMM=null;}
+    document.getElementById('mmCrumb').textContent='';return;
+  }
+  empty.style.display='none';canvas.style.display='block';
+  const labels=weeks;
+  const{text,grid}=gCol();
+  if(chartMM)chartMM.destroy();
+
+  // ── Destaque da semana selecionada no filtro ────────────────────────
+  const selSemana=document.getElementById('fSemana').value;
+  const isSelWeek=wk=>selSemana&&wk===selSemana;
+
+  // ── onClick compartilhado (Shift+clique alterna p/ visão mensal) ────
+  const onClickWeek=(evt,els)=>{
+    if(evt.native&&evt.native.shiftKey){toggleMMMode();return;}
+    if(!els.length||els[0].datasetIndex!==0)return;
+    const wk=weeks[els[0].index];
+    const{year}=weekInfo[wk];
+    const fAnoEl=document.getElementById('fAno');
+    if([...fAnoEl.options].some(o=>o.value===String(year)))fAnoEl.value=String(year);
+    document.getElementById('fSemana').value=wk;
+    document.getElementById('fMes').value='';
+    document.getElementById('fDia').value='';
+    applyFilters();toast(`Filtro: ${wk}`,'ok');
+  };
+
+  if(avaliar==='DownTime'){
+    const dtmap={};weeks.forEach(w=>dtmap[w]=0);
+    base.forEach(d=>{
+      const wk=d.semana;
+      if(activeBuscaStops.length>0)
+        activeBuscaStops.forEach(sc=>{dtmap[wk]+=(d.paradas[sc.code]||0);});
+      else
+        Object.values(d.paradas).forEach(v=>{dtmap[wk]+=v;});
+    });
+    const dtVals=weeks.map(w=>dtmap[w]||0);
+    const metaVals=weeks.map(()=>metaDowntime*7); // meta semanal = meta diária × 7
+    const dtColors=weeks.map((w,i)=>isSelWeek(w)?SELECT_BG:adhColorDT(dtVals[i],metaVals[i]));
+    const dtBorders=weeks.map((w,i)=>isSelWeek(w)?SELECT_BORDER:adhColorDT(dtVals[i],metaVals[i]).replace('.82','1').replace('.35','.6'));
+    chartMM=new Chart(canvas,{
+      data:{labels,datasets:[
+        {type:'bar',label:'DownTime (min)',data:dtVals,order:1,
+          backgroundColor:dtColors,
+          borderColor:dtBorders,
+          borderWidth:weeks.map((w,i)=>isSelWeek(w)?2.5:1),
+          borderRadius:4,
+          datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
+            formatter:v=>fn(v)+' min'}},
+        {type:'line',label:'Meta DT',order:0,
+          data:metaVals,
+          borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
+          pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},
+        plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
+          tooltip:{callbacks:{
+            title:ctx=>weeks[ctx[0].dataIndex],
+            label:ctx=>{
+              if(ctx.dataset.label==='Meta DT')return` Meta: ${fn(metaDowntime*7)} min (${fn(metaDowntime)}/dia)`;
+              return` DownTime: ${fn(ctx.raw)} min`;
+            }}}},
+        scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},
+          y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
+        onClick:onClickWeek}
+    });
+    document.getElementById('mmCrumb').textContent=`DownTime | ${weeks.length} semana(s) • clique filtra • shift+clique = mês`;
+  } else {
+    const wmap={};
+    base.forEach(d=>{const wk=d.semana;if(!wmap[wk])wmap[wk]={p:0,r:0};wmap[wk].p+=d.plano;wmap[wk].r+=d.realizado;});
+    const vals=weeks.map(w=>{const{p,r}=wmap[w]||{p:0,r:0};return p>0?+((r/p)*100).toFixed(1):null;});
+    const barColors=weeks.map((w,i)=>isSelWeek(w)?SELECT_BG:adhColor(vals[i]));
+    const barBorders=weeks.map((w,i)=>isSelWeek(w)?SELECT_BORDER:adhColor(vals[i]).replace('.82','1').replace('.35','.6'));
+    chartMM=new Chart(canvas,{
+      data:{labels,datasets:[
+        {type:'bar',label:'Aderência (%)',data:vals,order:1,
+          backgroundColor:barColors,
+          borderColor:barBorders,
+          borderWidth:weeks.map((w,i)=>isSelWeek(w)?2.5:1),
+          borderRadius:4,
+          datalabels:{display:true,anchor:'end',align:'top',color:text,font:{size:10,weight:'700'},
+            formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':''}},
+        {type:'line',label:`Meta ${metaAdh}%`,order:0,
+          data:labels.map(()=>metaAdh),
+          borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
+          pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},
+        plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
+          tooltip:{callbacks:{
+            title:ctx=>weeks[ctx[0].dataIndex],
+            label:ctx=>{
+              if(ctx.dataset.label&&ctx.dataset.label.startsWith('Meta'))return` Meta: ${metaAdh}%`;
+              const w=weeks[ctx.dataIndex];const{p,r}=wmap[w]||{p:0,r:0};
+              return[` Aderência: ${ctx.raw||0}%`,` Real.: ${fn(r)} / Plano: ${fn(p)}`];
+            }}}},
+        scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},
+          y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
+        onClick:onClickWeek}
+    });
+    document.getElementById('mmCrumb').textContent=`${tipo} | ${weeks.length} semana(s) • clique filtra • shift+clique = mês`;
   }
 }
 
@@ -1478,7 +1622,7 @@ async function loadPersisted(){
       const{regs,scs,dps,cfg,costsArr}=await Supa.loadAll();
       rawData=regs;stopCodes=scs;depara=dps;renderDp();
       // O Scrap IQ não grava `semana` nos registros — calcular aqui na leitura
-      rawData.forEach(d=>{if(!d.semana)d.semana=isoWeek(d.data);});
+      rawData.forEach(d=>{d.semana=isoWeek(d.data);}); // sempre recalcula, garante o formato atual (com ano)
       // Adaptar o formato de custo do Scrap IQ (materialCode/materialDesc) para o do Dash SF (codigo/descricao)
       custos=(costsArr||[]).map(c=>({codigo:c.materialCode,descricao:c.materialDesc||'',unitCost:c.unitCost||0}));
       rebuildCustoMap();
@@ -1510,6 +1654,7 @@ async function loadPersisted(){
     if(sc){try{stopCodes=JSON.parse(sc);}catch(e){}}
     if(raw&&raw.length){
       rawData=raw;
+      rawData.forEach(d=>{d.semana=isoWeek(d.data);}); // garante o formato atual (com ano), mesmo em cache antigo
       populateFilterOpts();applyFilters();setBadge();
       setMainSt('ready',`${rawData.length} registros restaurados da sessão anterior.`);
     }
@@ -2300,7 +2445,7 @@ function importGruposJSON(inp){
 
 /* ═══════════════ UTILITIES ══════════════════════════════════ */
 function toISO(v){if(!v)return'1970-01-01';if(v instanceof Date)return v.toISOString().slice(0,10);const s=v.toString().trim();if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);if(/^\d{2}\/\d{2}\/\d{4}/.test(s)){const[d,m,y]=s.split('/');return`${y}-${m}-${d}`;}if(/^\d{2}\/\d{2}\/\d{2}$/.test(s)){const[d,m,y]=s.split('/');return`20${y}-${m}-${d}`;}return s;}
-function isoWeek(iso){const[y,m,d]=iso.split('-').map(Number);const dt=new Date(y,m-1,d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()+4-(dt.getDay()||7));const y0=new Date(dt.getFullYear(),0,1);return'WK'+Math.ceil((((dt-y0)/86400000)+1)/7).toString().padStart(2,'0');}
+function isoWeek(iso){const[y,m,d]=iso.split('-').map(Number);const dt=new Date(y,m-1,d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()+4-(dt.getDay()||7));const isoYear=dt.getFullYear();const y0=new Date(isoYear,0,1);const wk=Math.ceil((((dt-y0)/86400000)+1)/7).toString().padStart(2,'0');return`WK${wk}/${String(isoYear).slice(2)}`;}
 function brDate(iso){if(!iso||iso==='1970-01-01')return iso;const[y,m,d]=iso.split('-');return`${d}/${m}/${y}`;}
 function fn(n){if(n===undefined||n===null)return'-';if(!n)return'0';return Number.isInteger(n)?n.toLocaleString('pt-BR'):n.toFixed(1).replace('.',',');}
 function stamp(){return new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);}
