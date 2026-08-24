@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v17</title>
+<title>Dash Plano Diário (SF) v17.1</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -201,7 +201,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.1</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -1619,7 +1619,7 @@ async function loadPersisted(){
     try{
       showLoadingScreen('☁ Carregando dados da nuvem...');
       setMainSt('loading','☁ Carregando dados da nuvem...');
-      const{regs,scs,dps,cfg,costsArr}=await Supa.loadAll();
+      const{regs,scs,dps,cfg,costsArr}=await Supa.loadAllWithRetry();
       rawData=regs;stopCodes=scs;depara=dps;renderDp();
       // O Scrap IQ não grava `semana` nos registros — calcular aqui na leitura
       rawData.forEach(d=>{d.semana=isoWeek(d.data);}); // sempre recalcula, garante o formato atual (com ano)
@@ -1636,7 +1636,7 @@ async function loadPersisted(){
       return;
     }catch(e){
       supaStatus('err','Falha na nuvem: '+e.message);
-      setMainSt('warn','Nuvem indisponível — usando dados locais.');
+      setMainSt('warn',`Nuvem indisponível (${escHtml(e.message)}) — usando dados locais. <a href="#" onclick="location.reload();return false;" style="color:var(--primary);font-weight:700">🔄 Tentar novamente</a>`);
       // continua para o fluxo local abaixo (fallback)
     }
   }
@@ -1763,7 +1763,7 @@ const Supa={
   // página vier mais curta que o tamanho confirmado — nunca assume páginas
   // cheias por antecipação (isso pulava dados silenciosamente).
   async getAll(store){
-    const REQUEST=1000, CONC=2;
+    const REQUEST=1000, CONC=1;
     const fetchPage=async(o)=>{
       const r=await fetch(this.ep(`?store=eq.${store}&select=doc&order=key.asc&limit=${REQUEST}&offset=${o}`),{headers:this.hdr()});
       if(!r.ok)throw new Error('Leitura '+store+': HTTP '+r.status);
@@ -1789,7 +1789,7 @@ const Supa={
   // Dedup de importação: baixa SÓ as chaves (select=key). Mesma correção
   // de paginação do getAll() — tamanho real confirmado, sem count=exact.
   async getKeys(store){
-    const REQUEST=1000, CONC=2;
+    const REQUEST=1000, CONC=1;
     const fetchPage=async(o)=>{
       const r=await fetch(this.ep(`?store=eq.${store}&select=key&order=key.asc&limit=${REQUEST}&offset=${o}`),{headers:this.hdr()});
       if(!r.ok)throw new Error('Chaves '+store+': HTTP '+r.status);
@@ -1826,6 +1826,23 @@ const Supa={
   },
 
   // loadAll: todos os stores em paralelo
+  // Uma nova tentativa automática antes de desistir — absorve blips
+  // transitórios de rede/RLS sem exigir ação do usuário.
+  async loadAllWithRetry(tentativas=2, delayMs=1500){
+    let lastErr;
+    for(let i=0;i<tentativas;i++){
+      try{ return await this.loadAll(); }
+      catch(e){
+        lastErr=e;
+        if(i<tentativas-1){
+          showLoadingScreen(`☁ Falhou, tentando novamente (${i+2}/${tentativas})...`);
+          await new Promise(r=>setTimeout(r,delayMs));
+        }
+      }
+    }
+    throw lastErr;
+  },
+
   async loadAll(){
     const[regs,scs,dps,cfgs,costsArr]=await Promise.all([
       this.getAll('registros'),this.getAll('stopcodes'),this.getAll('depara'),this.getAll('config'),this.getAll('costs')
