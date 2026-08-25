@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v17.2</title>
+<title>Dash Plano Diário (SF) v17.3</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -201,7 +201,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.2</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.3</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -927,7 +927,7 @@ function renderMonthly(){
               }
               return` DownTime: ${fn(ctx.raw)} min`;
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90,autoSkip:false},grid:{color:grid}},
           y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
         onClick:onClickMonth}
     });
@@ -962,7 +962,7 @@ function renderMonthly(){
               const m=months[ctx.dataIndex];const{p,r}=mmap[m]||{p:0,r:0};
               return[` Aderência: ${ctx.raw||0}%`,` Real.: ${fn(r)} / Plano: ${fn(p)}`];
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90,autoSkip:false},grid:{color:grid}},
           y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
         onClick:onClickMonth}
     });
@@ -1059,7 +1059,7 @@ function renderMonthlyAsWeekly(){
               if(ctx.dataset.label==='Meta DT')return` Meta: ${fn(metaDowntime*7)} min (${fn(metaDowntime)}/dia)`;
               return` DownTime: ${fn(ctx.raw)} min`;
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90,autoSkip:false},grid:{color:grid}},
           y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
         onClick:onClickWeek}
     });
@@ -1093,7 +1093,7 @@ function renderMonthlyAsWeekly(){
               const w=weeks[ctx.dataIndex];const{p,r}=wmap[w]||{p:0,r:0};
               return[` Aderência: ${ctx.raw||0}%`,` Real.: ${fn(r)} / Plano: ${fn(p)}`];
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90,autoSkip:false},grid:{color:grid}},
           y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
         onClick:onClickWeek}
     });
@@ -1190,7 +1190,7 @@ function renderDaily(){
               if(ctx.dataset.label&&ctx.dataset.label.startsWith('Meta'))return` Meta: ${fn(metaDowntime)} min/dia`;
               return` DownTime: ${fn(ctx.raw)} min`;
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90,autoSkip:false},grid:{color:grid}},
           y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
         onClick:onClickDay}
     });
@@ -1226,7 +1226,7 @@ function renderDaily(){
               const day=days[ctx.dataIndex];const{p,r}=dmap[day]||{p:0,r:0};
               return[` Aderência: ${ctx.raw||0}%`,` Real.: ${fn(r)} / Plano: ${fn(p)}`];
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90,autoSkip:false},grid:{color:grid}},
           y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
         onClick:onClickDay}
     });
