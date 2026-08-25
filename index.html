@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v17.5</title>
+<title>Dash Plano Diário (SF) v17.6</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -102,8 +102,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .chart-empty{display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:8px;color:var(--muted);font-size:12px}
 .chart-empty .ei{font-size:26px}
 /* Adherence charts row: slightly shorter */
-.adh-row .chart-card{min-height:335px}
-.adh-row .chart-wrap{min-height:265px}
+.adh-row .chart-card{min-height:290px}
+.adh-row .chart-wrap{min-height:220px}
 /* Main charts row: taller */
 .main-row .chart-card{min-height:360px}
 .main-row .chart-wrap{min-height:280px}
@@ -201,7 +201,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.5</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.6</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -618,7 +618,7 @@ function patchTheme(c){
 }
 function gCol(){
   const d=document.documentElement.getAttribute('data-theme')!=='light';
-  return{text:d?'#e2e8f0':'#1e293b',grid:d?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)'};
+  return{text:d?'#e2e8f0':'#1e293b',muted:d?'#94a3b8':'#64748b',grid:d?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)'};
 }
 
 /* ═══════════════ TABS ════════════════════════════════════════ */
@@ -875,7 +875,7 @@ function renderMonthly(){
   }
   empty.style.display='none';canvas.style.display='block';
   const labels=months.map(m=>{const[y,mo]=m.split('-');return`${MES_NOMES[+mo-1]}/${y.slice(2)}`;});
-  const{text,grid}=gCol();
+  const{text,muted,grid}=gCol();
   if(chartMM)chartMM.destroy();
 
   // ── Destaque do mês selecionado no filtro ──────────────────────────
@@ -922,14 +922,14 @@ function renderMonthly(){
           borderColor:dtBorders,
           borderWidth:months.map((m,i)=>isSelMonth(m)?2.5:1),
           borderRadius:4,
-          datalabels:{display:true,anchor:'end',align:'top',rotation:-90,color:text,font:{size:10,weight:'700'},
+          datalabels:{display:true,anchor:'end',align:'top',rotation:-45,color:muted,font:{size:8,weight:'700'},
             formatter:v=>fn(v)+' min'}},
         {type:'line',label:'Meta DT',order:0,
           data:metaVals,
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:65}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>{const m=months[ctx[0].dataIndex];const[y,mo]=m.split('-');return`${MES_NOMES[+mo-1]} ${y}`;},
@@ -959,14 +959,14 @@ function renderMonthly(){
           borderColor:barBorders,
           borderWidth:months.map((m,i)=>isSelMonth(m)?2.5:1),
           borderRadius:4,
-          datalabels:{display:true,anchor:'end',align:'top',rotation:-90,color:text,font:{size:10,weight:'700'},
+          datalabels:{display:true,anchor:'end',align:'top',rotation:-45,color:muted,font:{size:8,weight:'700'},
             formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':''}},
         {type:'line',label:`Meta ${metaAdh}%`,order:0,
           data:labels.map(()=>metaAdh),
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:65}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>{const m=months[ctx[0].dataIndex];const[y,mo]=m.split('-');return`${MES_NOMES[+mo-1]} ${y}`;},
@@ -1017,7 +1017,7 @@ function renderMonthlyAsWeekly(){
   }
   empty.style.display='none';canvas.style.display='block';
   const labels=weeks;
-  const{text,grid}=gCol();
+  const{text,muted,grid}=gCol();
   if(chartMM)chartMM.destroy();
 
   // ── Destaque da semana selecionada no filtro ────────────────────────
@@ -1057,14 +1057,14 @@ function renderMonthlyAsWeekly(){
           borderColor:dtBorders,
           borderWidth:weeks.map((w,i)=>isSelWeek(w)?2.5:1),
           borderRadius:4,
-          datalabels:{display:true,anchor:'end',align:'top',rotation:-90,color:text,font:{size:10,weight:'700'},
+          datalabels:{display:true,anchor:'end',align:'top',rotation:-45,color:muted,font:{size:8,weight:'700'},
             formatter:v=>fn(v)+' min'}},
         {type:'line',label:'Meta DT',order:0,
           data:metaVals,
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:65}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>weeks[ctx[0].dataIndex],
@@ -1090,14 +1090,14 @@ function renderMonthlyAsWeekly(){
           borderColor:barBorders,
           borderWidth:weeks.map((w,i)=>isSelWeek(w)?2.5:1),
           borderRadius:4,
-          datalabels:{display:true,anchor:'end',align:'top',rotation:-90,color:text,font:{size:10,weight:'700'},
+          datalabels:{display:true,anchor:'end',align:'top',rotation:-45,color:muted,font:{size:8,weight:'700'},
             formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':''}},
         {type:'line',label:`Meta ${metaAdh}%`,order:0,
           data:labels.map(()=>metaAdh),
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:65}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>weeks[ctx[0].dataIndex],
@@ -1151,7 +1151,7 @@ function renderDaily(){
   const days=Array.from({length:totalDiasMes},(_,i)=>String(i+1).padStart(2,'0'));
   const diasComDado=new Set(dayData.map(d=>d.data.slice(8,10)));
   const dlabels=days.map(d=>`${d}/${m2}`);
-  const{text,grid}=gCol();
+  const{text,muted,grid}=gCol();
   if(chartDD)chartDD.destroy();
 
   // ── Destaque do dia selecionado no filtro ──────────────────────────
@@ -1188,14 +1188,14 @@ function renderDaily(){
           borderColor:dtBorders,
           borderWidth:days.map(d=>isSelDay(d)?2.5:1),
           borderRadius:4,
-          datalabels:{display:true,anchor:'end',align:'top',rotation:-90,color:text,font:{size:10,weight:'700'},
+          datalabels:{display:true,anchor:'end',align:'top',rotation:-45,color:muted,font:{size:8,weight:'700'},
             formatter:v=>v!==null?fn(v)+' min':''}},
         {type:'line',label:`Meta ${fn(metaDowntime)} min/dia`,order:0,
           data:dlabels.map(()=>metaDowntime),
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:65}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>`${days[ctx[0].dataIndex]}/${m2}/${y2}`,
@@ -1223,14 +1223,14 @@ function renderDaily(){
           borderColor:barBorders,
           borderWidth:days.map(d=>isSelDay(d)?2.5:1),
           borderRadius:4,
-          datalabels:{display:true,anchor:'end',align:'top',rotation:-90,color:text,font:{size:10,weight:'700'},
+          datalabels:{display:true,anchor:'end',align:'top',rotation:-45,color:muted,font:{size:8,weight:'700'},
             formatter:v=>v!==null?v.toFixed(1).replace('.',',')+' %':''}},
         {type:'line',label:`Meta ${metaAdh}%`,order:0,
           data:dlabels.map(()=>metaAdh),
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:65}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>`${days[ctx[0].dataIndex]}/${m2}/${y2}`,
