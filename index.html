@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v17.1</title>
+<title>Dash Plano Diário (SF) v17.2</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -102,8 +102,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .chart-empty{display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:8px;color:var(--muted);font-size:12px}
 .chart-empty .ei{font-size:26px}
 /* Adherence charts row: slightly shorter */
-.adh-row .chart-card{min-height:260px}
-.adh-row .chart-wrap{min-height:190px}
+.adh-row .chart-card{min-height:300px}
+.adh-row .chart-wrap{min-height:230px}
 /* Main charts row: taller */
 .main-row .chart-card{min-height:360px}
 .main-row .chart-wrap{min-height:280px}
@@ -201,7 +201,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.1</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.2</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -299,7 +299,7 @@ canvas{cursor:pointer}
     <div class="charts-row adh-row">
       <div class="chart-card">
         <div class="chart-head">
-          <span class="chart-title">Aderência Mês a Mês</span>
+          <span class="chart-title" id="mmTitle">Aderência Mês a Mês</span>
           <div class="tgl-grp">
             <button class="tgl-btn on" id="tglMMMes" onclick="toggleMMMode('mes')" style="padding:3px 10px;font-size:10px;min-width:auto">Mês</button>
             <button class="tgl-btn" id="tglMMSemana" onclick="toggleMMMode('semana')" style="padding:3px 10px;font-size:10px;min-width:auto">Semana</button>
@@ -639,10 +639,11 @@ function populateFilterOpts(){
   const anos=[...new Set(rawData.map(d=>d.data.slice(0,4)))].sort();
   // Ordena semanas pela menor data de cada uma (nunca pela string — "WK52/26"
   // viria depois de "WK01/27" na ordenação alfabética, o que é cronologicamente errado)
+  // Descendente: mais recentes primeiro no dropdown.
   const semMinData={};
   rawData.forEach(d=>{if(!semMinData[d.semana]||d.data<semMinData[d.semana])semMinData[d.semana]=d.data;});
-  const semanas=Object.keys(semMinData).sort((a,b)=>semMinData[a].localeCompare(semMinData[b]));
-  const dias=[...new Set(rawData.map(d=>d.data))].sort();
+  const semanas=Object.keys(semMinData).sort((a,b)=>semMinData[b].localeCompare(semMinData[a]));
+  const dias=[...new Set(rawData.map(d=>d.data))].sort().reverse(); // descendente: mais recentes primeiro
   fillSel('fAno',anos.map(v=>({v,l:v})));
   fillSel('fSemana',semanas.map(v=>({v,l:v})));
   fillSel('fDia',dias.map(v=>({v,l:brDate(v)})));
@@ -842,6 +843,8 @@ function buildAdhBase({useAno=false,useMes=false}={}){
 }
 
 function renderMonthly(){
+  const titleEl=document.getElementById('mmTitle');
+  if(titleEl)titleEl.textContent=mmMode==='semana'?'Aderência Semana a Semana':'Aderência Mês a Mês';
   if(mmMode==='semana'){renderMonthlyAsWeekly();return;}
   const tipo=document.getElementById('fTipo').value;
   const avaliar=document.getElementById('fAvaliar').value;
@@ -875,7 +878,6 @@ function renderMonthly(){
 
   // ── onClick compartilhado (Shift+clique alterna p/ visão semanal) ──
   const onClickMonth=(evt,els)=>{
-    if(evt.native&&evt.native.shiftKey){toggleMMMode();return;}
     if(!els.length||els[0].datasetIndex!==0)return;
     const mk=months[els[0].index];const[y,mo]=mk.split('-');
     const fAnoEl=document.getElementById('fAno');
@@ -925,11 +927,11 @@ function renderMonthly(){
               }
               return` DownTime: ${fn(ctx.raw)} min`;
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
           y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
         onClick:onClickMonth}
     });
-    document.getElementById('mmCrumb').textContent=`DownTime | ${months.length} mês(es) • clique filtra • shift+clique = semana`;
+    document.getElementById('mmCrumb').textContent=`DownTime | ${months.length} mês(es) • clique para filtrar`;
   } else {
     // ── MODO ADERÊNCIA (comportamento original) ───────────────────────
     const mmap={};
@@ -960,11 +962,11 @@ function renderMonthly(){
               const m=months[ctx.dataIndex];const{p,r}=mmap[m]||{p:0,r:0};
               return[` Aderência: ${ctx.raw||0}%`,` Real.: ${fn(r)} / Plano: ${fn(p)}`];
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
           y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
         onClick:onClickMonth}
     });
-    document.getElementById('mmCrumb').textContent=`${tipo} | ${months.length} mês(es) • clique filtra • shift+clique = semana`;
+    document.getElementById('mmCrumb').textContent=`${tipo} | ${months.length} mês(es) • clique para filtrar`;
   }
 }
 
@@ -1011,7 +1013,6 @@ function renderMonthlyAsWeekly(){
 
   // ── onClick compartilhado (Shift+clique alterna p/ visão mensal) ────
   const onClickWeek=(evt,els)=>{
-    if(evt.native&&evt.native.shiftKey){toggleMMMode();return;}
     if(!els.length||els[0].datasetIndex!==0)return;
     const wk=weeks[els[0].index];
     const{year}=weekInfo[wk];
@@ -1058,11 +1059,11 @@ function renderMonthlyAsWeekly(){
               if(ctx.dataset.label==='Meta DT')return` Meta: ${fn(metaDowntime*7)} min (${fn(metaDowntime)}/dia)`;
               return` DownTime: ${fn(ctx.raw)} min`;
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
           y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
         onClick:onClickWeek}
     });
-    document.getElementById('mmCrumb').textContent=`DownTime | ${weeks.length} semana(s) • clique filtra • shift+clique = mês`;
+    document.getElementById('mmCrumb').textContent=`DownTime | ${weeks.length} semana(s) • clique para filtrar`;
   } else {
     const wmap={};
     base.forEach(d=>{const wk=d.semana;if(!wmap[wk])wmap[wk]={p:0,r:0};wmap[wk].p+=d.plano;wmap[wk].r+=d.realizado;});
@@ -1092,11 +1093,11 @@ function renderMonthlyAsWeekly(){
               const w=weeks[ctx.dataIndex];const{p,r}=wmap[w]||{p:0,r:0};
               return[` Aderência: ${ctx.raw||0}%`,` Real.: ${fn(r)} / Plano: ${fn(p)}`];
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
           y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
         onClick:onClickWeek}
     });
-    document.getElementById('mmCrumb').textContent=`${tipo} | ${weeks.length} semana(s) • clique filtra • shift+clique = mês`;
+    document.getElementById('mmCrumb').textContent=`${tipo} | ${weeks.length} semana(s) • clique para filtrar`;
   }
 }
 
@@ -1189,7 +1190,7 @@ function renderDaily(){
               if(ctx.dataset.label&&ctx.dataset.label.startsWith('Meta'))return` Meta: ${fn(metaDowntime)} min/dia`;
               return` DownTime: ${fn(ctx.raw)} min`;
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
           y:{min:0,ticks:{color:text,font:{size:10},callback:v=>fn(v)+' min'},grid:{color:grid}}},
         onClick:onClickDay}
     });
@@ -1225,7 +1226,7 @@ function renderDaily(){
               const day=days[ctx.dataIndex];const{p,r}=dmap[day]||{p:0,r:0};
               return[` Aderência: ${ctx.raw||0}%`,` Real.: ${fn(r)} / Plano: ${fn(p)}`];
             }}}},
-        scales:{x:{ticks:{color:text,font:{size:10}},grid:{color:grid}},
+        scales:{x:{ticks:{color:text,font:{size:10},minRotation:90,maxRotation:90},grid:{color:grid}},
           y:{min:0,max:115,ticks:{color:text,font:{size:10},callback:v=>v<=100?v+'%':''},grid:{color:grid}}},
         onClick:onClickDay}
     });
