@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v17.6</title>
+<title>Dash Plano Diário (SF) v17.7</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -102,8 +102,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .chart-empty{display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:8px;color:var(--muted);font-size:12px}
 .chart-empty .ei{font-size:26px}
 /* Adherence charts row: slightly shorter */
-.adh-row .chart-card{min-height:290px}
-.adh-row .chart-wrap{min-height:220px}
+.adh-row .chart-card{min-height:265px}
+.adh-row .chart-wrap{min-height:195px}
 /* Main charts row: taller */
 .main-row .chart-card{min-height:360px}
 .main-row .chart-wrap{min-height:280px}
@@ -201,7 +201,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.6</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.7</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -929,7 +929,7 @@ function renderMonthly(){
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>{const m=months[ctx[0].dataIndex];const[y,mo]=m.split('-');return`${MES_NOMES[+mo-1]} ${y}`;},
@@ -966,7 +966,7 @@ function renderMonthly(){
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>{const m=months[ctx[0].dataIndex];const[y,mo]=m.split('-');return`${MES_NOMES[+mo-1]} ${y}`;},
@@ -1064,7 +1064,7 @@ function renderMonthlyAsWeekly(){
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>weeks[ctx[0].dataIndex],
@@ -1097,7 +1097,7 @@ function renderMonthlyAsWeekly(){
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>weeks[ctx[0].dataIndex],
@@ -1195,7 +1195,7 @@ function renderDaily(){
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>`${days[ctx[0].dataIndex]}/${m2}/${y2}`,
@@ -1230,7 +1230,7 @@ function renderDaily(){
           borderColor:'rgba(245,158,11,.9)',borderWidth:2,borderDash:[7,4],
           pointRadius:0,fill:false,tension:0,datalabels:{display:false}}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:32}},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},
         plugins:{legend:{labels:{color:text,font:{size:10}}},datalabels:{display:false},
           tooltip:{callbacks:{
             title:ctx=>`${days[ctx[0].dataIndex]}/${m2}/${y2}`,
