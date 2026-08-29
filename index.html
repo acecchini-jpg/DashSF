@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v17.10</title>
+<title>Dash Plano Diário (SF) v18.1</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -117,6 +117,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .comm-info{font-size:10px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px}
 .grid-table{width:100%;border-collapse:collapse;font-size:11px}
 .grid-table th{background:var(--surface2);padding:7px 9px;text-align:left;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0}
+.sortable-th{cursor:pointer;user-select:none}
+.sortable-th:hover{color:var(--primary)}
 .grid-table td{padding:6px 9px;border-bottom:1px solid var(--border);vertical-align:top}
 .grid-table tr:hover td{background:var(--surface2)}.grid-table .num{text-align:right}
 .comm-scroll{max-height:340px;overflow-y:auto;border-radius:4px}
@@ -202,7 +204,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.10</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v18.1</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -569,6 +571,16 @@ let selStop      = null;
 let commRows     = []; // dataset 100% completo do painel de comentários (copiar e CSV sempre usam isto inteiro)
 let commPage     = 1;  // página atual da EXIBIÇÃO (só a tela pagina — 30k+ linhas travariam o navegador)
 const COMM_PAGE_SIZE = 200;
+let commSortField = null; // null = ordem padrão (data+turno); some ao clicar um cabeçalho
+let commSortDir   = 'asc';
+let summSortField = 'plano'; // ordenação padrão da tabela "Resumo por Produto/Máquina/Molde"
+let summSortDir   = 'desc';
+
+/** Seta ▲/▼ ao lado do cabeçalho da coluna atualmente ordenada (compartilhado
+ *  pelas duas tabelas com ordenação clicável). */
+function sortArrow(field,curField,curDir){
+  return field===curField ? (curDir==='asc'?' ▲':' ▼') : '';
+}
 let mmMode       = 'mes'; // 'mes' | 'semana' — modo do gráfico Aderência Mês a Mês
 let lastParetoTop= null; // {code,min,total} do motivo com mais minutos no Pareto atual
 let commState    = { stopCode:null, drillKey:null, grp:null };
@@ -1379,8 +1391,41 @@ function refreshComm(){
 
 function renderCommTable(rows,title){
   commRows=rows; // fonte única e COMPLETA: copiar e CSV sempre leem isto, nunca a página exibida
+  if(commSortField)applyCommSort(); // mantém a ordenação escolhida pelo usuário no novo conjunto filtrado
   commPage=1;    // toda seleção nova volta pra página 1
   document.getElementById('commTitle').textContent=title;
+  renderCommPage();
+}
+
+/** Extrai o valor de comparação de um registro para um campo de ordenação —
+ *  campos calculados (molde, aderência) não existem direto no objeto. */
+function commSortKey(d,field){
+  if(field==='molde')return getMolde(d)||'';
+  if(field==='adh')return d.plano>0?(d.realizado/d.plano*100):null;
+  return d[field];
+}
+
+function applyCommSort(){
+  const field=commSortField,dir=commSortDir;
+  commRows.sort((a,b)=>{
+    let va=commSortKey(a,field),vb=commSortKey(b,field);
+    if(va==null&&vb==null)return 0;
+    if(va==null)return 1;
+    if(vb==null)return -1;
+    if(typeof va==='string')return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+    return dir==='asc'?va-vb:vb-va;
+  });
+}
+
+function commSortBy(field){
+  if(commSortField===field){commSortDir=commSortDir==='asc'?'desc':'asc';}
+  else{
+    commSortField=field;
+    // Texto começa ascendente (A→Z); número começa descendente (maior primeiro)
+    commSortDir=['plano','realizado','refugo','adh'].includes(field)?'desc':'asc';
+  }
+  applyCommSort();
+  commPage=1;
   renderCommPage();
 }
 
@@ -1401,9 +1446,17 @@ function renderCommPage(){
     const pageRows=rows.slice(startIdx,startIdx+COMM_PAGE_SIZE);
 
     html=`<table class="grid-table"><thead><tr>
-      <th>Data</th><th>Turno</th><th>Código</th><th>Descrição</th>
-      <th>Máquina</th><th>Molde</th><th class="num">Plano</th><th class="num">Real.</th>
-      <th class="num">Aderência</th><th class="num">Refugo</th><th>Comentário</th>
+      <th class="sortable-th" onclick="commSortBy('data')">Data${sortArrow('data',commSortField,commSortDir)}</th>
+      <th class="sortable-th" onclick="commSortBy('turno')">Turno${sortArrow('turno',commSortField,commSortDir)}</th>
+      <th class="sortable-th" onclick="commSortBy('codigo')">Código${sortArrow('codigo',commSortField,commSortDir)}</th>
+      <th class="sortable-th" onclick="commSortBy('descricao')">Descrição${sortArrow('descricao',commSortField,commSortDir)}</th>
+      <th class="sortable-th" onclick="commSortBy('maquina')">Máquina${sortArrow('maquina',commSortField,commSortDir)}</th>
+      <th class="sortable-th" onclick="commSortBy('molde')">Molde${sortArrow('molde',commSortField,commSortDir)}</th>
+      <th class="num sortable-th" onclick="commSortBy('plano')">Plano${sortArrow('plano',commSortField,commSortDir)}</th>
+      <th class="num sortable-th" onclick="commSortBy('realizado')">Real.${sortArrow('realizado',commSortField,commSortDir)}</th>
+      <th class="num sortable-th" onclick="commSortBy('adh')">Aderência${sortArrow('adh',commSortField,commSortDir)}</th>
+      <th class="num sortable-th" onclick="commSortBy('refugo')">Refugo${sortArrow('refugo',commSortField,commSortDir)}</th>
+      <th class="sortable-th" onclick="commSortBy('comentario')">Comentário${sortArrow('comentario',commSortField,commSortDir)}</th>
     </tr></thead><tbody>`;
     pageRows.forEach(d=>{
       const isWip=d.descricao.toUpperCase().startsWith('WIP');
@@ -1516,15 +1569,33 @@ function renderSummTable(){
     if(d.descricao.toUpperCase().startsWith('WIP'))gmap[k].isWip=true;
     if(d.maquina)gmap[k].maquinas.add(d.maquina);
   });
-  const rows=Object.entries(gmap).map(([k,v])=>({k,...v})).sort((a,b)=>b.plano-a.plano);
+  const rows=Object.entries(gmap).map(([k,v])=>({k,...v}));
+  // Calcula aderência/scrap uma vez, direto no objeto — assim dá pra ordenar por eles também
+  rows.forEach(r=>{
+    r.adh=r.plano>0?(r.realizado/r.plano*100):null;
+    const div=r.realizado+r.refugo;
+    r.scr=div>0?(r.refugo/div*100):null;
+  });
+  rows.sort((a,b)=>{
+    let va=a[summSortField],vb=b[summSortField];
+    if(va==null&&vb==null)return 0;
+    if(va==null)return 1;
+    if(vb==null)return -1;
+    if(typeof va==='string')return summSortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+    return summSortDir==='asc'?va-vb:vb-va;
+  });
   let html=`<table class="grid-table"><thead><tr>
-    <th>${grp}</th><th>Descrição</th>${grp==='Produto'?'<th>Máquinas</th>':''}
-    <th class="num">Plano</th><th class="num">Realizado</th>
-    <th class="num">Aderência</th><th class="num">Refugo</th><th class="num">Scrap%</th>
+    <th class="sortable-th" onclick="summSortBy('k')">${grp}${sortArrow('k',summSortField,summSortDir)}</th>
+    <th class="sortable-th" onclick="summSortBy('lbl')">Descrição${sortArrow('lbl',summSortField,summSortDir)}</th>
+    ${grp==='Produto'?'<th>Máquinas</th>':''}
+    <th class="num sortable-th" onclick="summSortBy('plano')">Plano${sortArrow('plano',summSortField,summSortDir)}</th>
+    <th class="num sortable-th" onclick="summSortBy('realizado')">Realizado${sortArrow('realizado',summSortField,summSortDir)}</th>
+    <th class="num sortable-th" onclick="summSortBy('adh')">Aderência${sortArrow('adh',summSortField,summSortDir)}</th>
+    <th class="num sortable-th" onclick="summSortBy('refugo')">Refugo${sortArrow('refugo',summSortField,summSortDir)}</th>
+    <th class="num sortable-th" onclick="summSortBy('scr')">Scrap%${sortArrow('scr',summSortField,summSortDir)}</th>
   </tr></thead><tbody>`;
   rows.forEach(r=>{
-    const adh=r.plano>0?(r.realizado/r.plano*100):null;
-    const div=r.realizado+r.refugo,scr=div>0?(r.refugo/div*100):null;
+    const adh=r.adh,scr=r.scr;
     const ac=adh===null?'':adh>=90?'a-ok':adh>=75?'a-warn':'a-bad';
     const chip=r.isWip?'<span class="chip ch-wip">WIP</span>':'<span class="chip ch-fg">FG</span>';
     html+=`<tr>
@@ -1538,6 +1609,16 @@ function renderSummTable(){
   });
   html+='</tbody></table>';
   cont.innerHTML=html;
+}
+
+function summSortBy(field){
+  if(summSortField===field){summSortDir=summSortDir==='asc'?'desc':'asc';}
+  else{
+    summSortField=field;
+    // Texto (código/descrição) começa ascendente; número começa descendente (maior primeiro)
+    summSortDir=(field==='k'||field==='lbl')?'asc':'desc';
+  }
+  renderSummTable();
 }
 
 /* ═══════════════ DE/PARA ════════════════════════════════════ */
@@ -2560,7 +2641,7 @@ function importGruposJSON(inp){
 function toISO(v){if(!v)return'1970-01-01';if(v instanceof Date)return v.toISOString().slice(0,10);const s=v.toString().trim();if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);if(/^\d{2}\/\d{2}\/\d{4}/.test(s)){const[d,m,y]=s.split('/');return`${y}-${m}-${d}`;}if(/^\d{2}\/\d{2}\/\d{2}$/.test(s)){const[d,m,y]=s.split('/');return`20${y}-${m}-${d}`;}return s;}
 function isoWeek(iso){const[y,m,d]=iso.split('-').map(Number);const dt=new Date(y,m-1,d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()+4-(dt.getDay()||7));const isoYear=dt.getFullYear();const y0=new Date(isoYear,0,1);const wk=Math.ceil((((dt-y0)/86400000)+1)/7).toString().padStart(2,'0');return`WK${wk}/${String(isoYear).slice(2)}`;}
 function brDate(iso){if(!iso||iso==='1970-01-01')return iso;const[y,m,d]=iso.split('-');return`${d}/${m}/${y}`;}
-function fn(n){if(n===undefined||n===null)return'-';if(!n)return'0';return Number.isInteger(n)?n.toLocaleString('pt-BR'):n.toFixed(1).replace('.',',');}
+function fn(n){if(n===undefined||n===null)return'-';if(!n)return'0';return Math.trunc(n).toLocaleString('pt-BR');} // ignora decimais (valores costumam vir de fórmula do Excel) — vale pra todo o projeto, pois fn() é o formatador único de quantidades
 function stamp(){return new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);}
 function dlFile(name,content,type){const b=new Blob(['\uFEFF'+content],{type});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);}
 function typeFilter(data,tipo){if(tipo==='ACABADO')return data.filter(d=>!d.descricao.toUpperCase().startsWith('WIP'));if(tipo==='WIP')return data.filter(d=>d.descricao.toUpperCase().startsWith('WIP'));return data;}
