@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v17.9</title>
+<title>Dash Plano Diário (SF) v17.10</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -202,7 +202,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.9</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.10</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -1473,9 +1473,17 @@ function copyComm(){
   commRows.forEach(d=>{
     lines.push(commRowFields(d).map(v=>String(v).replace(/\t|\n/g,' ')).join('\t'));
   });
-  navigator.clipboard.writeText(lines.join('\n'))
-    .then(()=>toast(`✓ ${commRows.length} registro(s) copiado(s) para o clipboard.`,'ok'))
-    .catch(()=>toast('Erro ao copiar.','err'));
+  const text=lines.join('\n');
+  const sizeMB=(text.length/1024/1024).toFixed(1);
+  // O Clipboard API não documenta um limite fixo, mas na prática alguns
+  // navegadores ficam instáveis acima de poucos MB de texto — acima de 5.000
+  // registros já vale avisar e sugerir o CSV (download de arquivo, sem esse limite).
+  if(commRows.length>5000){
+    if(!confirm(`Você está prestes a copiar ${fn(commRows.length)} registros (~${sizeMB} MB de texto).\n\nConjuntos muito grandes podem falhar ao copiar, dependendo do navegador. O botão CSV ao lado não tem esse limite.\n\nTentar copiar mesmo assim?`))return;
+  }
+  navigator.clipboard.writeText(text)
+    .then(()=>toast(`✓ ${commRows.length} registro(s) copiado(s) (${sizeMB} MB).`,'ok'))
+    .catch(e=>toast(`Erro ao copiar (${sizeMB} MB): ${e.message||e}. Tente o botão CSV, que não tem esse limite.`,'err'));
 }
 
 function exportCommCSV(){
