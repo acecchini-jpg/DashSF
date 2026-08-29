@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v17.7</title>
+<title>Dash Plano Diário (SF) v17.9</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -40,6 +40,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 /* BUTTONS */
 .btn{padding:7px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;transition:all .2s}
+.btn:disabled{opacity:.4;cursor:not-allowed}
 .btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-h)}
 .btn-success{background:var(--success);color:#fff}.btn-danger{background:var(--danger);color:#fff}
 .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--primary);color:var(--primary)}
@@ -201,7 +202,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.7</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v17.9</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
@@ -353,6 +354,7 @@ canvas{cursor:pointer}
         <div style="display:flex;align-items:center;gap:8px">
           <span class="comm-info" id="commCount"></span>
           <button class="btn btn-ghost btn-sm" onclick="copyComm()">📋 Copiar</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportCommCSV()">⬇ CSV</button>
           <button class="btn btn-ghost btn-sm" onclick="hideComm()">✕</button>
         </div>
       </div>
@@ -564,6 +566,9 @@ let custoMap     = {};   // codigo -> {descricao, unitCost} (índice rápido, re
 let filteredData = [];
 let activeTurnos = new Set(['1T','2T','3T']);
 let selStop      = null;
+let commRows     = []; // dataset 100% completo do painel de comentários (copiar e CSV sempre usam isto inteiro)
+let commPage     = 1;  // página atual da EXIBIÇÃO (só a tela pagina — 30k+ linhas travariam o navegador)
+const COMM_PAGE_SIZE = 200;
 let mmMode       = 'mes'; // 'mes' | 'semana' — modo do gráfico Aderência Mês a Mês
 let lastParetoTop= null; // {code,min,total} do motivo com mais minutos no Pareto atual
 let commState    = { stopCode:null, drillKey:null, grp:null };
@@ -1373,20 +1378,34 @@ function refreshComm(){
 }
 
 function renderCommTable(rows,title){
+  commRows=rows; // fonte única e COMPLETA: copiar e CSV sempre leem isto, nunca a página exibida
+  commPage=1;    // toda seleção nova volta pra página 1
   document.getElementById('commTitle').textContent=title;
+  renderCommPage();
+}
+
+/** Renderiza só a página atual de `commRows` na tela. Não recebe dados —
+ *  sempre relê `commRows`/`commPage`, para servir tanto a primeira
+ *  renderização quanto os cliques de paginação (commGotoPage). */
+function renderCommPage(){
+  const rows=commRows;
   document.getElementById('commCount').textContent=`${rows.length} registro(s)`;
-  const MAX=250;
   let html;
   if(!rows.length){
     html='<p style="color:var(--muted);font-size:12px;padding:10px 0">Nenhum registro encontrado para esta seleção.</p>';
   } else {
-    const shown=rows.slice(0,MAX);
+    const totalPages=Math.max(1,Math.ceil(rows.length/COMM_PAGE_SIZE));
+    if(commPage>totalPages)commPage=totalPages;
+    if(commPage<1)commPage=1;
+    const startIdx=(commPage-1)*COMM_PAGE_SIZE;
+    const pageRows=rows.slice(startIdx,startIdx+COMM_PAGE_SIZE);
+
     html=`<table class="grid-table"><thead><tr>
       <th>Data</th><th>Turno</th><th>Código</th><th>Descrição</th>
       <th>Máquina</th><th>Molde</th><th class="num">Plano</th><th class="num">Real.</th>
       <th class="num">Aderência</th><th class="num">Refugo</th><th>Comentário</th>
     </tr></thead><tbody>`;
-    shown.forEach(d=>{
+    pageRows.forEach(d=>{
       const isWip=d.descricao.toUpperCase().startsWith('WIP');
       const adh=d.plano>0?((d.realizado/d.plano)*100).toFixed(1):null;
       const ac=adh===null?'':+adh>=90?'a-ok':+adh>=75?'a-warn':'a-bad';
@@ -1406,22 +1425,67 @@ function renderCommTable(rows,title){
       </tr>`;
     });
     html+='</tbody></table>';
-    if(rows.length>MAX) html+=`<p style="font-size:10px;color:var(--muted);padding:8px">Exibindo ${MAX} de ${rows.length} registros. Refine os filtros para ver todos.</p>`;
+
+    if(totalPages>1){
+      const de=startIdx+1,ate=Math.min(startIdx+COMM_PAGE_SIZE,rows.length);
+      html+=`<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 0 4px;font-size:11px">
+        <button class="btn btn-ghost btn-sm" onclick="commGotoPage(${commPage-1})" ${commPage<=1?'disabled':''}>‹ Anterior</button>
+        <span style="color:var(--muted)">${de}–${ate} de ${rows.length} • página ${commPage}/${totalPages}</span>
+        <button class="btn btn-ghost btn-sm" onclick="commGotoPage(${commPage+1})" ${commPage>=totalPages?'disabled':''}>Próxima ›</button>
+      </div>`;
+    }
   }
   document.getElementById('commContent').innerHTML=html;
   document.getElementById('commPanel').classList.add('vis');
 }
 
+function commGotoPage(page){
+  const totalPages=Math.max(1,Math.ceil(commRows.length/COMM_PAGE_SIZE));
+  commPage=Math.min(Math.max(1,page),totalPages);
+  renderCommPage();
+}
+
+/** Monta uma linha (array de campos) a partir de um registro — reaproveitada
+ *  por copyComm() e exportCommCSV() pra garantir que as duas saídas tenham
+ *  sempre as mesmas colunas e os mesmos 100% dos dados que a tela mostra. */
+function commRowFields(d){
+  const isWip=d.descricao.toUpperCase().startsWith('WIP');
+  const adh=d.plano>0?((d.realizado/d.plano)*100).toFixed(1).replace('.',',')+' %':'-';
+  return[
+    brDate(d.data),
+    d.turnoDisp||d.turno,
+    d.codigo+(isWip?' WIP':' FG'),
+    d.descricao||'',
+    d.maquina||'-',
+    getMolde(d)||'-',
+    fn(d.plano),
+    fn(d.realizado),
+    adh,
+    fn(d.refugo),
+    (d.comentario||'—')
+  ];
+}
+const COMM_HEADER=['Data','Turno','Código','Descrição','Máquina','Molde','Plano','Real.','Aderência','Refugo','Comentário'];
+
 function copyComm(){
-  const table=document.querySelector('#commContent table');
-  if(!table){toast('Sem dados para copiar.','err');return;}
-  const lines=[];
-  table.querySelectorAll('tr').forEach(tr=>{
-    lines.push([...tr.querySelectorAll('th,td')].map(c=>c.textContent.trim().replace(/\t|\n/g,' ')).join('\t'));
+  if(!commRows.length){toast('Sem dados para copiar.','err');return;}
+  const lines=[COMM_HEADER.join('\t')];
+  commRows.forEach(d=>{
+    lines.push(commRowFields(d).map(v=>String(v).replace(/\t|\n/g,' ')).join('\t'));
   });
   navigator.clipboard.writeText(lines.join('\n'))
-    .then(()=>toast('✓ Copiado para o clipboard.','ok'))
+    .then(()=>toast(`✓ ${commRows.length} registro(s) copiado(s) para o clipboard.`,'ok'))
     .catch(()=>toast('Erro ao copiar.','err'));
+}
+
+function exportCommCSV(){
+  if(!commRows.length){toast('Sem dados para exportar.','err');return;}
+  let c=COMM_HEADER.join(',')+'\n';
+  commRows.forEach(d=>{
+    c+=commRowFields(d).map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')+'\n';
+  });
+  dlFile(`comentarios_${stamp()}.csv`,c,'text/csv');
+  toast(`✓ ${commRows.length} registro(s) exportado(s) (CSV).`,'ok');
 }
 function hideComm(){
   document.getElementById('commPanel').classList.remove('vis');
