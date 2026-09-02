@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v19</title>
+<title>Dash Plano Diário (SF) v19.1</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -204,7 +204,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v19</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v19.1</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <button class="theme-btn" id="btnAtualizar" style="display:none" onclick="handleUpdateClick(event)"
@@ -1955,12 +1955,17 @@ const Supa={
   },
 
   // Sinal gravado pelo Scrap Manager sempre que ele apaga/substitui algo
-  // (store='sync_flags', key='global'). Como updated_at nunca dispara em
-  // DELETE, é assim que o Dash SF (somente leitura) sabe que precisa
-  // forçar uma recarga completa em vez de confiar só no incremental.
-  async getDestructiveFlag(){
+  // NUM STORE ESPECÍFICO — key=<nome do store>, ex.: key='registros'.
+  // (store='sync_flags'). Como updated_at nunca dispara em DELETE, é
+  // assim que o Dash SF (somente leitura) sabe que precisa forçar uma
+  // recarga completa daquele store em vez de confiar só no incremental.
+  // NOTA: aguardando o Scrap Manager gravar por store — enquanto isso não
+  // for publicado lá, esta consulta não encontra nada e retorna null
+  // (comportamento seguro: só reduz a agilidade da rede de segurança,
+  // a checagem de contagem diária continua funcionando normalmente).
+  async getDestructiveFlag(store){
     try{
-      const url=this.ep(`?store=eq.sync_flags&select=doc&limit=1`);
+      const url=this.ep(`?store=eq.sync_flags&key=eq.${store}&select=doc&limit=1`);
       const r=await fetch(url,{headers:this.hdr()});
       if(!r.ok)return null;
       const rows=await r.json();
@@ -2108,7 +2113,7 @@ function mergeByKey(cached,deltas,keyFn){
  *  relógio de sincronização. */
 async function smartSync(store,forceHard=false){
   const lastHardSync=localStorage.getItem(`dashsf-last-hard-sync-${store}`);
-  const flag=await Supa.getDestructiveFlag();
+  const flag=await Supa.getDestructiveFlag(store); // sinal ESPECÍFICO deste store — evita recarga cruzada por mudanças em stores não relacionados (ex.: refugo não deve forçar recarga de registros)
   let needsHardReload=forceHard||!lastHardSync||(flag&&flag>lastHardSync);
 
   // Rede de segurança opcional (seção 3, footnote): confere contagem real
