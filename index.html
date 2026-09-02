@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v18.1</title>
+<title>Dash Plano Diário (SF) v19</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -204,9 +204,13 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v18.1</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v19</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
+  <button class="theme-btn" id="btnAtualizar" style="display:none" onclick="handleUpdateClick(event)"
+    ontouchstart="updateTouchStart(event)" ontouchend="updateTouchEnd(event)"
+    ontouchmove="updateTouchCancel()" ontouchcancel="updateTouchCancel()"
+    title="Clique: atualização rápida (só o que mudou) — Shift+Clique: atualização completa (recarrega tudo)">🔄 Atualizar</button>
   <span id="userEmailBadge" style="display:none;font-size:11px;color:var(--muted)"></span>
   <button class="theme-btn" id="logoutBtn" style="display:none" onclick="doLogout()">⏻ Sair</button>
   <a id="analyserBtn" class="theme-btn" href="https://acecchini-jpg.github.io/Analyser/" target="_blank" rel="noopener noreferrer" title="Abrir Scrap Analyser em nova aba">
@@ -1784,13 +1788,24 @@ async function loadPersisted(){
   // ── FONTE: NUVEM ────────────────────────────────────────────────
   if(Supa.active&&Supa.cfgOk()){
     try{
-      showLoadingScreen('☁ Carregando dados da nuvem...');
-      setMainSt('loading','☁ Carregando dados da nuvem...');
-      // Renova a sessão logo antes da carga pesada (5 fontes em paralelo) —
+      showLoadingScreen('☁ Sincronizando dados...');
+      setMainSt('loading','☁ Sincronizando dados...');
+      // Renova a sessão logo antes da carga (5 fontes em paralelo) —
       // garante um token válido no momento exato do disparo, independente
       // do listener onAuthStateChange (ver guarda contra evento transitório).
       if(typeof Auth!=='undefined')await Auth.getSession();
-      const{regs,scs,dps,cfg,costsArr}=await Supa.loadAllWithRetry();
+      // registros/stopcodes/costs: sincronização incremental (soft) —
+      // primeira abertura sem carimbo salvo já faz carga completa sozinha,
+      // dentro do próprio smartSync(). depara/config são pequenos e
+      // próprios do Dash SF, continuam em fetch simples de sempre.
+      const[regs,scs,costsArr,dps,cfgArr]=await Promise.all([
+        withRetry(()=>smartSync('registros')),
+        withRetry(()=>smartSync('stopcodes')),
+        withRetry(()=>smartSync('costs')),
+        withRetry(()=>Supa.getAll('depara')),
+        withRetry(()=>Supa.getAll('config'))
+      ]);
+      const cfg=cfgArr.length?cfgArr[0]:null;
       rawData=regs;stopCodes=scs;depara=dps;renderDp();
       // O Scrap IQ não grava `semana` nos registros — calcular aqui na leitura
       rawData.forEach(d=>{d.semana=isoWeek(d.data);}); // sempre recalcula, garante o formato atual (com ano)
@@ -1838,7 +1853,7 @@ async function loadPersisted(){
 /* ═══════════════ SUPABASE — REST PostgREST puro ═══════════════
    Tabela: scrapiq_store (store, key, doc jsonb, PK(store,key)).
    Modo híbrido: Supa.active → nuvem; senão → IndexedDB/localStorage.
-   Stores: registros | stopcodes | depara | config
+   Stores: registros | stopcodes | depara | config | costs | sync_flags
    ════════════════════════════════════════════════════════════════ */
 function djb2(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return(h>>>0).toString(36);}
 const dpKey =r=>djb2(`${r.codAcabado||''}|${r.codWip||''}|${r.molde||''}|${r.descricao||''}`);
@@ -1915,6 +1930,42 @@ const Supa={
     const r=await fetch(this.ep('?select=key&limit=1'),{headers:this.hdr()});
     if(!r.ok)throw new Error('HTTP '+r.status+' — '+(await r.text()).slice(0,160));
     return true;
+  },
+
+  // ── Sincronização incremental (soft/hard update) ──────────────────
+  // Busca só os documentos alterados/inseridos DEPOIS de um timestamp
+  // (coluna updated_at, mantida automaticamente pelo Postgres em
+  // qualquer insert/update — não importa qual app escreveu).
+  async getUpdatedSince(store,isoTimestamp){
+    const url=this.ep(`?store=eq.${store}&select=doc&updated_at=gt.${encodeURIComponent(isoTimestamp)}&order=key.asc`);
+    const r=await fetch(url,{headers:this.hdr()});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return(await r.json()).map(x=>x.doc);
+  },
+
+  // Contagem barata (Range 0-0 + Prefer count=exact) — usada como rede de
+  // segurança ocasional contra exclusões que o soft sync não perceberia.
+  async count(store){
+    const r=await fetch(this.ep(`?store=eq.${store}&select=key`),{
+      headers:this.hdr({'Range-Unit':'items','Range':'0-0','Prefer':'count=exact'})
+    });
+    const cr=r.headers.get('content-range')||'';
+    const total=parseInt(cr.split('/')[1]);
+    return isFinite(total)?total:0;
+  },
+
+  // Sinal gravado pelo Scrap Manager sempre que ele apaga/substitui algo
+  // (store='sync_flags', key='global'). Como updated_at nunca dispara em
+  // DELETE, é assim que o Dash SF (somente leitura) sabe que precisa
+  // forçar uma recarga completa em vez de confiar só no incremental.
+  async getDestructiveFlag(){
+    try{
+      const url=this.ep(`?store=eq.sync_flags&select=doc&limit=1`);
+      const r=await fetch(url,{headers:this.hdr()});
+      if(!r.ok)return null;
+      const rows=await r.json();
+      return rows[0]?.doc?.lastDestructive||null;
+    }catch(e){return null;}
   },
 
   // Upsert: dedup por chave via Map (evita "cannot affect row a second time"),
@@ -2000,33 +2051,98 @@ const Supa={
       {method:'DELETE',headers:this.hdr({'Prefer':'count=exact'})});
     if(!r.ok)throw new Error('Delete filtrado: HTTP '+r.status);
     return parseInt((r.headers.get('content-range')||'*/0').split('/')[1])||0;
-  },
-
-  // loadAll: todos os stores em paralelo
-  // Uma nova tentativa automática antes de desistir — absorve blips
-  // transitórios de rede/RLS sem exigir ação do usuário.
-  async loadAllWithRetry(tentativas=2, delayMs=1500){
-    let lastErr;
-    for(let i=0;i<tentativas;i++){
-      try{ return await this.loadAll(); }
-      catch(e){
-        lastErr=e;
-        if(i<tentativas-1){
-          showLoadingScreen(`☁ Falhou, tentando novamente (${i+2}/${tentativas})...`);
-          await new Promise(r=>setTimeout(r,delayMs));
-        }
-      }
-    }
-    throw lastErr;
-  },
-
-  async loadAll(){
-    const[regs,scs,dps,cfgs,costsArr]=await Promise.all([
-      this.getAll('registros'),this.getAll('stopcodes'),this.getAll('depara'),this.getAll('config'),this.getAll('costs')
-    ]);
-    return{regs,scs,dps,cfg:cfgs.length?cfgs[0]:null,costsArr};
   }
 };
+
+/* ═══════════════ SINCRONIZAÇÃO INCREMENTAL (soft/hard update) ══
+   O cache local (IndexedDB, via dbSave/dbGet já existentes) guarda a
+   última cópia de cada store. Toda leitura passa por smartSync():
+   • soft (padrão): só busca o que mudou desde a última sincronização
+     (updated_at > último carimbo) e mescla por chave no cache local.
+   • hard (forçado, ou automático se necessário): recarrega tudo.
+   Como o Dash SF nunca apaga nada, updated_at sozinho não percebe
+   exclusões feitas pelo Scrap Manager — por isso o sinal em
+   store='sync_flags' (seção 3 da diretiva) e, como rede de segurança
+   extra opcional, uma conferência de contagem 1x por dia. ═══════════ */
+
+/** Nova tentativa automática genérica — mesma ideia do antigo
+ *  Supa.loadAllWithRetry(), só que reutilizável para qualquer chamada. */
+async function withRetry(fn,tentativas=2,delayMs=1500){
+  let lastErr;
+  for(let i=0;i<tentativas;i++){
+    try{return await fn();}
+    catch(e){
+      lastErr=e;
+      if(i<tentativas-1){
+        showLoadingScreen(`☁ Falhou, tentando novamente (${i+2}/${tentativas})...`);
+        await new Promise(r=>setTimeout(r,delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/** Chave natural de cada store, usada pra mesclar cache+deltas sem duplicar. */
+function keyFnFor(store){
+  if(store==='registros')return d=>`${d.data}|${d.turno}|${d.codigo}`;
+  if(store==='stopcodes')return d=>d.code;
+  if(store==='costs')return d=>d.materialCode;
+  return d=>JSON.stringify(d); // fallback — não deveria ser necessário nos stores usados aqui
+}
+
+function mergeByKey(cached,deltas,keyFn){
+  const map=new Map(cached.map(d=>[keyFn(d),d]));
+  deltas.forEach(d=>map.set(keyFn(d),d)); // upsert: substitui se já existia, adiciona se não
+  return[...map.values()];
+}
+
+/** NOTA sobre uma diferença em relação ao pseudocódigo da diretiva original:
+ *  lá, os carimbos 'dashsf-last-sync'/'dashsf-last-hard-sync' são chaves
+ *  ÚNICAS compartilhadas entre todos os stores. Isso mistura os relógios de
+ *  stores com históricos de atualização independentes (ex.: sincronizar
+ *  'stopcodes' atualizaria o carimbo que 'registros' também usa, fazendo
+ *  a próxima busca incremental de registros olhar a partir de um instante
+ *  errado). Aqui cada store tem seu próprio par de carimbos
+ *  (`dashsf-last-sync-<store>` / `dashsf-last-hard-sync-<store>`) — mesmo
+ *  princípio da diretiva, aplicado de forma que cada store tem seu próprio
+ *  relógio de sincronização. */
+async function smartSync(store,forceHard=false){
+  const lastHardSync=localStorage.getItem(`dashsf-last-hard-sync-${store}`);
+  const flag=await Supa.getDestructiveFlag();
+  let needsHardReload=forceHard||!lastHardSync||(flag&&flag>lastHardSync);
+
+  // Rede de segurança opcional (seção 3, footnote): confere contagem real
+  // 1x por dia, além do sinal — cobre o caso raro do sinal falhar ao gravar.
+  if(!needsHardReload){
+    const hoje=new Date().toISOString().slice(0,10);
+    const ultimaChecagem=localStorage.getItem(`dashsf-last-count-check-${store}`);
+    if(ultimaChecagem!==hoje){
+      try{
+        const remoteCount=await Supa.count(store);
+        const cached=(await dbGet(`dashsf_cache_${store}`))||[];
+        if(remoteCount!==cached.length)needsHardReload=true;
+        localStorage.setItem(`dashsf-last-count-check-${store}`,hoje);
+      }catch(e){/* falha na checagem opcional não bloqueia o soft sync normal */}
+    }
+  }
+
+  if(needsHardReload){
+    const full=await Supa.getAll(store);
+    await dbSave(`dashsf_cache_${store}`,full);
+    const agora=new Date().toISOString();
+    localStorage.setItem(`dashsf-last-hard-sync-${store}`,agora);
+    localStorage.setItem(`dashsf-last-sync-${store}`,agora);
+    return full;
+  }
+
+  const lastSync=localStorage.getItem(`dashsf-last-sync-${store}`)||lastHardSync||new Date(0).toISOString();
+  const cached=(await dbGet(`dashsf_cache_${store}`))||[];
+  const deltas=await Supa.getUpdatedSince(store,lastSync);
+  const merged=mergeByKey(cached,deltas,keyFnFor(store));
+  await dbSave(`dashsf_cache_${store}`,merged);
+  localStorage.setItem(`dashsf-last-sync-${store}`,new Date().toISOString());
+  return merged;
+}
 
 /* ── Configuração / UI ──────────────────────────────────────────── */
 function supaLoadLocalCfg(){
@@ -2123,6 +2239,60 @@ function hideLoginOverlay(){
   const ov=document.getElementById('loginOverlay');
   if(ov)ov.style.display='none';
 }
+/* ═══════════════ BOTÃO "🔄 Atualizar" — soft/hard update ═══════
+   Clique normal → soft (só o que mudou). Shift+clique (desktop) ou
+   toque longo ~600ms (celular) → hard (recarrega tudo do zero).
+   O gesto de toque longo é proposital NÃO mencionado no tooltip. ══ */
+function handleUpdateClick(event){
+  const hard=!!(event&&event.shiftKey);
+  runUpdate(hard);
+}
+
+let _updateTouchTimer=null,_updateLongPressFired=false;
+function updateTouchStart(event){
+  _updateLongPressFired=false;
+  clearTimeout(_updateTouchTimer);
+  _updateTouchTimer=setTimeout(()=>{
+    _updateLongPressFired=true;
+    if(navigator.vibrate){try{navigator.vibrate(30);}catch(e){}}
+    runUpdate(true);
+  },600);
+}
+function updateTouchEnd(event){
+  clearTimeout(_updateTouchTimer);
+  if(_updateLongPressFired&&event&&event.preventDefault)event.preventDefault(); // evita disparar o clique normal em seguida
+}
+function updateTouchCancel(){clearTimeout(_updateTouchTimer);}
+
+async function runUpdate(hard){
+  if(!Supa.active||!Supa.cfgOk()){toast('Ative a nuvem primeiro.','err');return;}
+  const btn=document.getElementById('btnAtualizar');
+  if(btn)btn.disabled=true;
+  showLoadingScreen(hard?'Atualizando tudo...':'Sincronizando...');
+  try{
+    if(typeof Auth!=='undefined')await Auth.getSession();
+    const[regs,scs,costsArr]=await Promise.all([
+      withRetry(()=>smartSync('registros',hard)),
+      withRetry(()=>smartSync('stopcodes',hard)),
+      withRetry(()=>smartSync('costs',hard))
+    ]);
+    rawData=regs;stopCodes=scs;
+    rawData.forEach(d=>{d.semana=isoWeek(d.data);});
+    custos=(costsArr||[]).map(c=>({codigo:c.materialCode,descricao:c.materialDesc||'',unitCost:c.unitCost||0}));
+    rebuildCustoMap();
+    populateFilterOpts();applyFilters();setBadge();
+    renderKPIs();renderGrupos();
+    setMainSt('ready',`☁ ${rawData.length} registros carregados da nuvem.`);
+    supaStatus('ok',`✓ Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`);
+    toast(hard?`✓ Atualização completa concluída (${fn(rawData.length)} registros).`:'✓ Sincronizado.','ok');
+  }catch(e){
+    toast('Erro ao atualizar: '+e.message,'err');
+  }finally{
+    if(btn)btn.disabled=false;
+    hideLoadingScreen();
+  }
+}
+
 function updateAuthUI(){
   const logoutBtn=document.getElementById('logoutBtn');
   const emailBadge=document.getElementById('userEmailBadge');
@@ -2170,6 +2340,8 @@ function updateCloudUI(){
   if(t)t.textContent=Supa.active?'⏻ Desativar Nuvem':'☁ Ativar Nuvem';
   const h=document.getElementById('cloudBadge');
   if(h)h.style.display=Supa.active?'inline-block':'none';
+  const bu=document.getElementById('btnAtualizar');
+  if(bu)bu.style.display=Supa.active?'inline-flex':'none';
 }
 
 /* ── config.json (deploy compartilhado) ─────────────────────────
