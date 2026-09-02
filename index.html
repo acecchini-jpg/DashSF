@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v19.1</title>
+<title>Dash Plano Diário (SF) v19.2</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -204,7 +204,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v19.1</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v19.2</span></h1>
   <span class="badge-rec" id="recBadge">Sem dados</span>
   <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
   <button class="theme-btn" id="btnAtualizar" style="display:none" onclick="handleUpdateClick(event)"
@@ -2286,7 +2286,6 @@ async function runUpdate(hard){
     custos=(costsArr||[]).map(c=>({codigo:c.materialCode,descricao:c.materialDesc||'',unitCost:c.unitCost||0}));
     rebuildCustoMap();
     populateFilterOpts();applyFilters();setBadge();
-    renderKPIs();renderGrupos();
     setMainSt('ready',`☁ ${rawData.length} registros carregados da nuvem.`);
     supaStatus('ok',`✓ Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`);
     toast(hard?`✓ Atualização completa concluída (${fn(rawData.length)} registros).`:'✓ Sincronizado.','ok');
