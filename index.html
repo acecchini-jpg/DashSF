@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dash Plano Diário (SF) v19.4</title>
+<title>Dash Plano Diário (SF) v19.5</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -207,7 +207,7 @@ canvas{cursor:pointer}
 
 
 <header class="app-header">
-  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v19.4</span></h1>
+  <h1>📊 Dash Plano Diário <span style="font-size:12px;font-weight:600;color:var(--muted)">(SF)</span> <span style="font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px">v19.5</span></h1>
   <div class="hdr-center">
     <span class="badge-rec" id="recBadge">Sem dados</span>
     <span id="cloudBadge" style="display:none;font-size:11px;background:rgba(59,130,246,.15);border:1px solid var(--primary);color:var(--primary);padding:3px 10px;border-radius:20px;font-weight:700;white-space:nowrap">☁ NUVEM</span>
@@ -1550,9 +1550,14 @@ function copyComm(){
 
 function exportCommCSV(){
   if(!commRows.length){toast('Sem dados para exportar.','err');return;}
-  let c=COMM_HEADER.join(',')+'\n';
+  // Minutos de parada: só no CSV (a tela e o Copiar não mudam). Uma coluna por motivo,
+  // mesmo padrão do exportCSVFull — só entram motivos com minutos > 0 nos registros exportados.
+  const scUsados=stopCodes.filter(s=>commRows.some(d=>((d.paradas||{})[s.code]||0)>0));
+  const hdr=[...COMM_HEADER,...scUsados.map(s=>`${s.code}_${String(s.desc||'').replace(/[,\n]/g,' ')}`)];
+  let c=hdr.join(',')+'\n';
   commRows.forEach(d=>{
-    c+=commRowFields(d).map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')+'\n';
+    const sv=scUsados.map(s=>(d.paradas||{})[s.code]||0);
+    c+=[...commRowFields(d),...sv].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')+'\n';
   });
   dlFile(`comentarios_${stamp()}.csv`,c,'text/csv');
   toast(`✓ ${commRows.length} registro(s) exportado(s) (CSV).`,'ok');
